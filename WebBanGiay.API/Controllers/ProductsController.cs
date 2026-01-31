@@ -119,9 +119,8 @@ namespace WebBanGiay.API.Controllers
                 _logger.LogInformation("  Color: {Color}", createDto?.Color ?? "NULL");
 
                 // === LOGGING: Log CategoryId with type info ===
-                _logger.LogInformation("  ⚠️ CategoryId VALUE: {CategoryIdValue} | TYPE: {CategoryIdType}", 
-                    createDto.CategoryId, 
-                    createDto.CategoryId.GetType().Name);
+                _logger.LogInformation("  ⚠️ CategoryId VALUE: {CategoryIdValue}",
+                    createDto?.CategoryId ?? 0);
 
                 // Validate ModelState (automatic validation of DataAnnotations)
                 if (!ModelState.IsValid)
@@ -140,6 +139,12 @@ namespace WebBanGiay.API.Controllers
 
                 _logger.LogInformation("✅ ModelState validation passed");
 
+                // Null check
+                if (createDto == null)
+                {
+                    return BadRequest(new { message = "Request body cannot be empty" });
+                }
+
                 // Additional validation for CategoryId
                 if (createDto.CategoryId <= 0)
                 {
@@ -152,15 +157,15 @@ namespace WebBanGiay.API.Controllers
                 // Map DTO to Product model
                 var product = new Product
                 {
-                    Name = createDto.Name,
-                    Description = createDto.Description,
+                    Name = createDto.Name ?? string.Empty,
+                    Description = createDto.Description ?? string.Empty,
                     Price = createDto.Price,
                     Stock = createDto.Stock,
-                    ImageUrl = createDto.ImageUrl,
+                    ImageUrl = createDto.ImageUrl ?? string.Empty,
                     CategoryId = createDto.CategoryId,
-                    Brand = createDto.Brand,
-                    Size = createDto.Size,
-                    Color = createDto.Color,
+                    Brand = createDto.Brand ?? string.Empty,
+                    Size = createDto.Size ?? string.Empty,
+                    Color = createDto.Color ?? string.Empty,
                     CreatedAt = DateTime.UtcNow
                 };
 

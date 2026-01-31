@@ -7,7 +7,9 @@ function Admin() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [editingCategory, setEditingCategory] = useState(null);
   const [activeTab, setActiveTab] = useState('products');
   const [formData, setFormData] = useState({
     name: '',
@@ -20,6 +22,11 @@ function Admin() {
     size: '',
     color: ''
   });
+  const [categoryFormData, setCategoryFormData] = useState({
+    name: '',
+    description: ''
+  });
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
     const loadData = async () => {
@@ -47,6 +54,24 @@ function Admin() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const newErrors = {};
+
+    // Validation
+    if (!formData.name.trim()) newErrors.name = 'Product name is required';
+    if (!formData.description.trim()) newErrors.description = 'Description is required';
+    if (!formData.price || parseFloat(formData.price) <= 0) newErrors.price = 'Price must be greater than 0';
+    if (!formData.stock || parseInt(formData.stock) < 0) newErrors.stock = 'Stock must be 0 or greater';
+    if (!formData.imageUrl.trim()) newErrors.imageUrl = 'Image URL is required';
+    if (!formData.categoryId) newErrors.categoryId = 'Please select a category';
+    if (!formData.brand.trim()) newErrors.brand = 'Brand is required';
+    if (!formData.size.trim()) newErrors.size = 'Size is required';
+    if (!formData.color.trim()) newErrors.color = 'Color is required';
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
     try {
       const data = {
         ...formData,
@@ -64,7 +89,8 @@ function Admin() {
       setShowModal(false);
       setEditingProduct(null);
       resetForm();
-      
+      setErrors({});
+
       // Reload data
       const productsRes = await productsApi.getAll();
       setProducts(productsRes.data);
@@ -114,6 +140,83 @@ function Admin() {
       size: '',
       color: ''
     });
+    setErrors({});
+  };
+
+  const resetCategoryForm = () => {
+    setCategoryFormData({
+      name: '',
+      description: ''
+    });
+    setErrors({});
+  };
+
+  const handleCategoryInputChange = (e) => {
+    const { name, value } = e.target;
+    setCategoryFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleCategorySubmit = async (e) => {
+    e.preventDefault();
+    const newErrors = {};
+
+    if (!categoryFormData.name.trim()) newErrors.name = 'Category name is required';
+    if (!categoryFormData.description.trim()) newErrors.description = 'Description is required';
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    try {
+      if (editingCategory) {
+        await categoriesApi.update(editingCategory.id, categoryFormData);
+      } else {
+        await categoriesApi.create(categoryFormData);
+      }
+
+      setShowCategoryModal(false);
+      setEditingCategory(null);
+      resetCategoryForm();
+
+      // Reload categories
+      const categoriesRes = await categoriesApi.getAll();
+      setCategories(categoriesRes.data);
+    } catch (error) {
+      console.error('Error saving category:', error);
+      alert('Có lỗi xảy ra: ' + (error.response?.data || error.message));
+    }
+  };
+
+  const handleEditCategory = (category) => {
+    setEditingCategory(category);
+    setCategoryFormData({
+      name: category.name,
+      description: category.description
+    });
+    setShowCategoryModal(true);
+  };
+
+  const handleDeleteCategory = async (id) => {
+    if (window.confirm('Bạn có chắc muốn xóa danh mục này?')) {
+      try {
+        await categoriesApi.delete(id);
+        const categoriesRes = await categoriesApi.getAll();
+        setCategories(categoriesRes.data);
+      } catch (error) {
+        console.error('Error deleting category:', error);
+        alert('Không thể xóa danh mục này');
+      }
+    }
+  };
+
+  const openAddCategoryModal = () => {
+    setEditingCategory(null);
+    resetCategoryForm();
+    setShowCategoryModal(true);
   };
 
   const openAddModal = () => {
@@ -135,13 +238,13 @@ function Admin() {
       <aside className="sidebar">
         <div className="sidebar-logo">
           <svg viewBox="0 0 24 24" width="40" height="40">
-            <path fill="currentColor" d="M21 8.719L7.836 14.303C6.74 14.768 5.818 15 5.075 15c-.836 0-1.445-.295-1.819-.884-.485-.76-.273-1.982.559-3.272.494-.754 1.122-1.446 1.734-2.108-.144.234-1.415 2.349-.025 3.345.275.197.618.298 1.02.298.86 0 1.962-.378 3.277-.944L21 8.719z"/>
+            <path fill="currentColor" d="M21 8.719L7.836 14.303C6.74 14.768 5.818 15 5.075 15c-.836 0-1.445-.295-1.819-.884-.485-.76-.273-1.982.559-3.272.494-.754 1.122-1.446 1.734-2.108-.144.234-1.415 2.349-.025 3.345.275.197.618.298 1.02.298.86 0 1.962-.378 3.277-.944L21 8.719z" />
           </svg>
           <span>Admin</span>
         </div>
 
         <nav className="sidebar-nav">
-          <button 
+          <button
             className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
             onClick={() => setActiveTab('dashboard')}
           >
@@ -153,7 +256,7 @@ function Admin() {
             </svg>
             Dashboard
           </button>
-          <button 
+          <button
             className={`nav-btn ${activeTab === 'products' ? 'active' : ''}`}
             onClick={() => setActiveTab('products')}
           >
@@ -162,7 +265,7 @@ function Admin() {
             </svg>
             Products
           </button>
-          <button 
+          <button
             className={`nav-btn ${activeTab === 'categories' ? 'active' : ''}`}
             onClick={() => setActiveTab('categories')}
           >
@@ -201,6 +304,15 @@ function Admin() {
                   <path d="M5 12h14"></path>
                 </svg>
                 Add Product
+              </button>
+            )}
+            {activeTab === 'categories' && (
+              <button className="add-btn" onClick={openAddCategoryModal}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 5v14"></path>
+                  <path d="M5 12h14"></path>
+                </svg>
+                Add Category
               </button>
             )}
           </div>
@@ -325,11 +437,27 @@ function Admin() {
             <div className="categories-grid">
               {categories.map(category => (
                 <div key={category.id} className="category-card">
-                  <div className="category-icon">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"></path>
-                      <path d="M7 7h.01"></path>
-                    </svg>
+                  <div className="category-header">
+                    <div className="category-icon">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"></path>
+                        <path d="M7 7h.01"></path>
+                      </svg>
+                    </div>
+                    <div className="category-actions">
+                      <button className="action-btn edit" onClick={() => handleEditCategory(category)}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
+                        </svg>
+                      </button>
+                      <button className="action-btn delete" onClick={() => handleDeleteCategory(category.id)}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M3 6h18"></path>
+                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                   <h3>{category.name}</h3>
                   <p>{category.description}</p>
@@ -359,106 +487,115 @@ function Admin() {
             <form onSubmit={handleSubmit} className="modal-form">
               <div className="form-grid">
                 <div className="form-group full">
-                  <label>Product Name</label>
+                  <label>Product Name *</label>
                   <input
                     type="text"
                     name="name"
                     value={formData.name}
                     onChange={handleInputChange}
                     placeholder="Enter product name"
-                    required
+                    className={errors.name ? 'input-error' : ''}
                   />
+                  {errors.name && <span className="error-text">{errors.name}</span>}
                 </div>
                 <div className="form-group full">
-                  <label>Description</label>
+                  <label>Description *</label>
                   <textarea
                     name="description"
                     value={formData.description}
                     onChange={handleInputChange}
                     placeholder="Enter product description"
                     rows="3"
-                    required
+                    className={errors.description ? 'input-error' : ''}
                   />
+                  {errors.description && <span className="error-text">{errors.description}</span>}
                 </div>
                 <div className="form-group">
-                  <label>Price (VNĐ)</label>
-                  <input
-                    type="number"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleInputChange}
-                    placeholder="0"
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Stock</label>
-                  <input
-                    type="number"
-                    name="stock"
-                    value={formData.stock}
-                    onChange={handleInputChange}
-                    placeholder="0"
-                    required
-                  />
-                </div>
-                <div className="form-group full">
-                  <label>Image URL</label>
-                  <input
-                    type="url"
-                    name="imageUrl"
-                    value={formData.imageUrl}
-                    onChange={handleInputChange}
-                    placeholder="https://..."
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Category</label>
+                  <label>Category *</label>
                   <select
                     name="categoryId"
                     value={formData.categoryId}
                     onChange={handleInputChange}
-                    required
+                    className={errors.categoryId ? 'input-error' : ''}
                   >
                     <option value="">Select category</option>
                     {categories.map(cat => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
+                  {errors.categoryId && <span className="error-text">{errors.categoryId}</span>}
                 </div>
                 <div className="form-group">
-                  <label>Brand</label>
+                  <label>Brand *</label>
                   <input
                     type="text"
                     name="brand"
                     value={formData.brand}
                     onChange={handleInputChange}
                     placeholder="Nike, Adidas..."
-                    required
+                    className={errors.brand ? 'input-error' : ''}
                   />
+                  {errors.brand && <span className="error-text">{errors.brand}</span>}
                 </div>
                 <div className="form-group">
-                  <label>Size</label>
+                  <label>Price (VNĐ) *</label>
+                  <input
+                    type="number"
+                    name="price"
+                    value={formData.price}
+                    onChange={handleInputChange}
+                    placeholder="0"
+                    className={errors.price ? 'input-error' : ''}
+                  />
+                  {errors.price && <span className="error-text">{errors.price}</span>}
+                </div>
+                <div className="form-group">
+                  <label>Stock *</label>
+                  <input
+                    type="number"
+                    name="stock"
+                    value={formData.stock}
+                    onChange={handleInputChange}
+                    placeholder="0"
+                    className={errors.stock ? 'input-error' : ''}
+                  />
+                  {errors.stock && <span className="error-text">{errors.stock}</span>}
+                </div>
+                <div className="form-group">
+                  <label>Size *</label>
                   <input
                     type="text"
                     name="size"
                     value={formData.size}
                     onChange={handleInputChange}
                     placeholder="42"
-                    required
+                    className={errors.size ? 'input-error' : ''}
                   />
+                  {errors.size && <span className="error-text">{errors.size}</span>}
                 </div>
                 <div className="form-group">
-                  <label>Color</label>
+                  <label>Color *</label>
                   <input
                     type="text"
                     name="color"
                     value={formData.color}
                     onChange={handleInputChange}
                     placeholder="Black, White..."
-                    required
+                    className={errors.color ? 'input-error' : ''}
                   />
+                  {errors.color && <span className="error-text">{errors.color}</span>}
+                </div>
+                <div className="form-group full">
+                  <label>Image URL *</label>
+                  <input
+                    type="url"
+                    name="imageUrl"
+                    value={formData.imageUrl}
+                    onChange={handleInputChange}
+                    placeholder="https://..."
+                    className={errors.imageUrl ? 'input-error' : ''}
+                  />
+                  {errors.imageUrl && <span className="error-text">{errors.imageUrl}</span>}
                 </div>
               </div>
               <div className="modal-actions">
@@ -467,6 +604,57 @@ function Admin() {
                 </button>
                 <button type="submit" className="submit-btn">
                   {editingProduct ? 'Update Product' : 'Add Product'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Category Modal */}
+      {showCategoryModal && (
+        <div className="modal-overlay" onClick={() => setShowCategoryModal(false)}>
+          <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{editingCategory ? 'Edit Category' : 'Add New Category'}</h2>
+              <button className="close-btn" onClick={() => setShowCategoryModal(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6 6 18"></path>
+                  <path d="m6 6 12 12"></path>
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleCategorySubmit} className="modal-form">
+              <div className="form-group full">
+                <label>Category Name *</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={categoryFormData.name}
+                  onChange={handleCategoryInputChange}
+                  placeholder="e.g., Áo, Giày, Quần..."
+                  className={errors.name ? 'input-error' : ''}
+                />
+                {errors.name && <span className="error-text">{errors.name}</span>}
+              </div>
+              <div className="form-group full">
+                <label>Description *</label>
+                <textarea
+                  name="description"
+                  value={categoryFormData.description}
+                  onChange={handleCategoryInputChange}
+                  placeholder="Enter category description"
+                  rows="3"
+                  className={errors.description ? 'input-error' : ''}
+                />
+                {errors.description && <span className="error-text">{errors.description}</span>}
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="cancel-btn" onClick={() => setShowCategoryModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="submit-btn">
+                  {editingCategory ? 'Update Category' : 'Add Category'}
                 </button>
               </div>
             </form>

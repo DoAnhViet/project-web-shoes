@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WebBanGiay.API", "WebBanGiay.API\WebBanGiay.API.csproj", "{469174B5-CF0D-5FE0-737B-2BD89AFAA0BE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{469174B5-CF0D-5FE0-737B-2BD89AFAA0BE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{469174B5-CF0D-5FE0-737B-2BD89AFAA0BE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{469174B5-CF0D-5FE0-737B-2BD89AFAA0BE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{469174B5-CF0D-5FE0-737B-2BD89AFAA0BE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E08D8F98-485B-4371-AC6C-F8496EF02EBA}
+	EndGlobalSection
+EndGlobal

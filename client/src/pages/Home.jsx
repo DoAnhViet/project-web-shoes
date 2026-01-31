@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { productsApi, categoriesApi } from '../api/api';
+import { useCart } from '../context/CartContext';
 import './Home.css';
 
 function Home() {
+  const { getTotalItems } = useCart();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,10 +24,15 @@ function Home() {
           categoriesApi.getAll()
         ]);
 
-        setProducts(productsRes.data);
-        setCategories(categoriesRes.data);
-        if (productsRes.data.length > 0) {
-          setFeaturedProduct(productsRes.data[0]);
+        // Normalize products response (supports paged result { items, ... } or direct array)
+        const productsData = productsRes.data?.items ?? productsRes.data?.value ?? productsRes.data ?? [];
+        // Normalize categories response (supports { value: [...] } or direct array)
+        const categoriesData = categoriesRes.data?.value ?? categoriesRes.data ?? [];
+
+        setProducts(productsData);
+        setCategories(categoriesData);
+        if (productsData && productsData.length > 0) {
+          setFeaturedProduct(productsData[0]);
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -37,14 +44,10 @@ function Home() {
   }, [selectedCategory]);
 
   const formatPrice = (price) => {
-    return new Intl.NumberFormat('vi-VN', { 
-      style: 'currency', 
-      currency: 'VND' 
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
     }).format(price);
-  };
-
-  const formatPriceUSD = (price) => {
-    return '$' + Math.round(price / 24000);
   };
 
   return (
@@ -53,7 +56,7 @@ function Home() {
       <header className="header">
         <div className="logo">
           <svg viewBox="0 0 24 24" width="50" height="50">
-            <path fill="currentColor" d="M21 8.719L7.836 14.303C6.74 14.768 5.818 15 5.075 15c-.836 0-1.445-.295-1.819-.884-.485-.76-.273-1.982.559-3.272.494-.754 1.122-1.446 1.734-2.108-.144.234-1.415 2.349-.025 3.345.275.197.618.298 1.02.298.86 0 1.962-.378 3.277-.944L21 8.719z"/>
+            <path fill="currentColor" d="M21 8.719L7.836 14.303C6.74 14.768 5.818 15 5.075 15c-.836 0-1.445-.295-1.819-.884-.485-.76-.273-1.982.559-3.272.494-.754 1.122-1.446 1.734-2.108-.144.234-1.415 2.349-.025 3.345.275.197.618.298 1.02.298.86 0 1.962-.378 3.277-.944L21 8.719z" />
           </svg>
         </div>
         <nav className="nav-menu">
@@ -75,13 +78,14 @@ function Home() {
               <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path>
             </svg>
           </button>
-          <button className="icon-btn cart-btn">
+          <Link to="/cart" className="icon-btn cart-btn">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="8" cy="21" r="1"></circle>
               <circle cx="19" cy="21" r="1"></circle>
               <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path>
             </svg>
-          </button>
+            {getTotalItems() > 0 && <span className="cart-badge">{getTotalItems()}</span>}
+          </Link>
           <Link to="/admin" className="admin-link-btn">Admin</Link>
         </div>
       </header>
@@ -90,14 +94,14 @@ function Home() {
       <section className="hero-section">
         <div className="hero-sidebar">
           <div className="category-list">
-            <button 
+            <button
               className={`category-item ${selectedCategory === '' ? 'active' : ''}`}
               onClick={() => setSelectedCategory('')}
             >
               ALL SHOES
             </button>
             {categories.map(cat => (
-              <button 
+              <button
                 key={cat.id}
                 className={`category-item ${selectedCategory === cat.id.toString() ? 'active' : ''}`}
                 onClick={() => setSelectedCategory(cat.id.toString())}
@@ -146,12 +150,12 @@ function Home() {
             <div className="featured-card">
               <span className="limited-tag">LIMITED EDITION</span>
               <h3>{featuredProduct.name.toUpperCase()}</h3>
-              <p className="featured-price">{formatPriceUSD(featuredProduct.price)}</p>
+              <p className="featured-price">{formatPrice(featuredProduct.price)}</p>
               <div className="color-options">
-                <span className="color-dot" style={{background: '#FF6B35'}}></span>
-                <span className="color-dot" style={{background: '#FFD700'}}></span>
-                <span className="color-dot" style={{background: '#FF1493'}}></span>
-                <span className="color-dot" style={{background: '#8B5CF6'}}></span>
+                <span className="color-dot" style={{ background: '#FF6B35' }}></span>
+                <span className="color-dot" style={{ background: '#FFD700' }}></span>
+                <span className="color-dot" style={{ background: '#FF1493' }}></span>
+                <span className="color-dot" style={{ background: '#8B5CF6' }}></span>
               </div>
               <button className="add-to-bag-btn">Add to Bag</button>
             </div>
@@ -167,7 +171,7 @@ function Home() {
             <button className="tab-btn">BEST SELLER</button>
           </div>
           <h2 className="collection-title">
-            DISCOVER OUR LATEST<br/>
+            DISCOVER OUR LATEST<br />
             <span className="highlight">COLLECTION</span>
           </h2>
           <p className="collection-desc">
@@ -182,7 +186,7 @@ function Home() {
             <span className="spark-icon">✦</span>
           </div>
           <button className="more-collection-btn">
-            MORE <span className="arrow">↗</span><br/>
+            MORE <span className="arrow">↗</span><br />
             COLLECTION
           </button>
         </div>
@@ -205,27 +209,31 @@ function Home() {
           ) : (
             <div className="products-grid">
               {products.map(product => (
-                <div key={product.id} className="product-card">
-                  <span className="product-brand">{product.brand.toUpperCase()}</span>
-                  <h3 className="product-name">{product.name}</h3>
-                  <p className="product-price">{formatPriceUSD(product.price)}</p>
-                  <div className="color-options">
-                    <span className="color-dot" style={{background: '#32CD32'}}></span>
-                    <span className="color-dot" style={{background: '#FFD700'}}></span>
-                    <span className="color-dot active" style={{background: '#1E90FF'}}></span>
-                    <span className="color-dot" style={{background: '#FF69B4'}}></span>
+                <Link key={product.id} to={`/product/${product.id}`} style={{ textDecoration: 'none', color: 'inherit' }} className="product-link">
+                  <div className="product-card">
+                    <span className="product-brand">{product.brand.toUpperCase()}</span>
+                    <h3 className="product-name">{product.name}</h3>
+                    <p className="product-price">{formatPrice(product.price)}</p>
+                    <div className="color-options">
+                      <span className="color-dot" style={{ background: '#32CD32' }}></span>
+                      <span className="color-dot" style={{ background: '#FFD700' }}></span>
+                      <span className="color-dot active" style={{ background: '#1E90FF' }}></span>
+                      <span className="color-dot" style={{ background: '#FF69B4' }}></span>
+                    </div>
+                    <div className="product-image">
+                      <img src={product.imageUrl} alt={product.name} />
+                    </div>
+                    <div className="size-options">
+                      <span className="size">40</span>
+                      <span className="size active">42</span>
+                      <span className="size">41</span>
+                      <span className="size">43</span>
+                    </div>
+                    <div className="add-to-bag-btn">
+                      View Details →
+                    </div>
                   </div>
-                  <div className="product-image">
-                    <img src={product.imageUrl} alt={product.name} />
-                  </div>
-                  <div className="size-options">
-                    <span className="size">40</span>
-                    <span className="size active">42</span>
-                    <span className="size">41</span>
-                    <span className="size">43</span>
-                  </div>
-                  <button className="add-to-bag-btn">Add to Bag</button>
-                </div>
+                </Link>
               ))}
             </div>
           )}

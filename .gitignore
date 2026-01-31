@@ -6,6 +6,11 @@ obj/
 *.userprefs
 *.sln.docstates
 *.csproj.user
+# ASP.NET Core secrets (never commit)
+appsettings.json
+appsettings.Development.json
+WebBanGiay.API/appsettings.json
+WebBanGiay.API/appsettings.Development.json
 
 # Build results
 [Dd]ebug/

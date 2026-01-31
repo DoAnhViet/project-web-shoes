@@ -1,5 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using WebBanGiay.API.Data;
+using WebBanGiay.API.Repositories.Interfaces;
+using WebBanGiay.API.Repositories.Implementations;
+using WebBanGiay.API.Observers;
+using WebBanGiay.API.Observers.Implementations;
 using DotNetEnv;
 
 // Load .env file from parent directory
@@ -34,6 +38,25 @@ var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING"
     ?? builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+
+// Register Repository Pattern with Dependency Injection
+builder.Services.AddScoped<IProductRepository, ProductRepository>();
+builder.Services.AddScoped<IReviewRepository, ReviewRepository>();
+
+// Register Observer Pattern
+// ReviewSubject is a singleton to maintain observer subscriptions across requests
+builder.Services.AddSingleton<ReviewSubject>();
+// UpdateProductRatingObserver is scoped to ensure it uses the correct DbContext
+builder.Services.AddScoped<UpdateProductRatingObserver>();
+
+// Register and initialize observer
+builder.Services.AddScoped(provider =>
+{
+    var subject = provider.GetRequiredService<ReviewSubject>();
+    var observer = provider.GetRequiredService<UpdateProductRatingObserver>();
+    subject.Subscribe(observer);
+    return observer;
+});
 
 // Configure CORS for React app
 builder.Services.AddCors(options =>

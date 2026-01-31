@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using WebBanGiay.API.Data;
+using WebBanGiay.API.DTOs;
 using WebBanGiay.API.Models;
+using WebBanGiay.API.Repositories.Interfaces;
 
 namespace WebBanGiay.API.Controllers
 {
@@ -9,116 +9,225 @@ namespace WebBanGiay.API.Controllers
     [ApiController]
     public class ProductsController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IProductRepository _productRepository;
+        private readonly ILogger<ProductsController> _logger;
 
-        public ProductsController(ApplicationDbContext context)
+        public ProductsController(IProductRepository productRepository, ILogger<ProductsController> logger)
         {
-            _context = context;
+            _productRepository = productRepository;
+            _logger = logger;
         }
 
         // GET: api/Products
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Product>>> GetProducts(
+        public async Task<ActionResult<PagedResult<Product>>> GetProducts(
             [FromQuery] string? search = null,
             [FromQuery] int? categoryId = null,
-            [FromQuery] string? brand = null)
+            [FromQuery] string? brand = null,
+            [FromQuery] decimal? minPrice = null,
+            [FromQuery] decimal? maxPrice = null,
+            [FromQuery] string? gender = null,
+            [FromQuery] string? size = null,
+            [FromQuery] string? color = null,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
-            var query = _context.Products.Include(p => p.Category).AsQueryable();
-
-            if (!string.IsNullOrEmpty(search))
+            try
             {
-                query = query.Where(p => p.Name.Contains(search) || p.Description.Contains(search));
-            }
+                var filter = new ProductFilter
+                {
+                    SearchKeyword = search,
+                    CategoryId = categoryId,
+                    Brand = brand,
+                    MinPrice = minPrice,
+                    MaxPrice = maxPrice,
+                    Gender = gender,
+                    Size = size,
+                    Color = color,
+                    PageNumber = pageNumber,
+                    PageSize = pageSize
+                };
 
-            if (categoryId.HasValue)
+                var result = await _productRepository.GetProductsAsync(filter);
+                return Ok(result);
+            }
+            catch (Exception ex)
             {
-                query = query.Where(p => p.CategoryId == categoryId.Value);
+                _logger.LogError(ex, "Error occurred while fetching products");
+                return StatusCode(500, new { message = "Error occurred while fetching products" });
             }
+        }
 
-            if (!string.IsNullOrEmpty(brand))
+        // GET: api/Products/suggestions
+        [HttpGet("suggestions")]
+        public async Task<ActionResult<List<Product>>> GetSuggestions([FromQuery] string query)
+        {
+            try
             {
-                query = query.Where(p => p.Brand == brand);
-            }
+                if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
+                {
+                    return Ok(new List<Product>());
+                }
 
-            return await query.ToListAsync();
+                var suggestions = await _productRepository.GetSuggestionsWithDetailsAsync(query);
+                return Ok(suggestions);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while fetching suggestions");
+                return StatusCode(500, new { message = "Error occurred while fetching suggestions" });
+            }
         }
 
         // GET: api/Products/5
         [HttpGet("{id}")]
         public async Task<ActionResult<Product>> GetProduct(int id)
         {
-            var product = await _context.Products
-                .Include(p => p.Category)
-                .FirstOrDefaultAsync(p => p.Id == id);
-
-            if (product == null)
+            try
             {
-                return NotFound();
-            }
+                var product = await _productRepository.GetByIdAsync(id);
 
-            return product;
+                if (product == null)
+                {
+                    return NotFound(new { message = "Product not found" });
+                }
+
+                return Ok(product);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while fetching product with ID: {ProductId}", id);
+                return StatusCode(500, new { message = "Error occurred while fetching product" });
+            }
         }
 
         // POST: api/Products
         [HttpPost]
-        public async Task<ActionResult<Product>> PostProduct(Product product)
+        public async Task<ActionResult<Product>> PostProduct([FromBody] ProductCreateDto createDto)
         {
-            product.CreatedAt = DateTime.UtcNow;
-            _context.Products.Add(product);
-            await _context.SaveChangesAsync();
+            try
+            {
+                // === LOGGING: Log received payload ===
+                _logger.LogInformation("📥 POST /api/products received payload");
+                _logger.LogInformation("  Name: {Name}", createDto?.Name ?? "NULL");
+                _logger.LogInformation("  Description: {Description}", createDto?.Description ?? "NULL");
+                _logger.LogInformation("  Price: {Price}", createDto?.Price);
+                _logger.LogInformation("  Stock: {Stock}", createDto?.Stock);
+                _logger.LogInformation("  ImageUrl: {ImageUrl}", createDto?.ImageUrl ?? "NULL");
+                _logger.LogInformation("  Brand: {Brand}", createDto?.Brand ?? "NULL");
+                _logger.LogInformation("  Size: {Size}", createDto?.Size ?? "NULL");
+                _logger.LogInformation("  Color: {Color}", createDto?.Color ?? "NULL");
 
-            return CreatedAtAction(nameof(GetProduct), new { id = product.Id }, product);
+                // === LOGGING: Log CategoryId with type info ===
+                _logger.LogInformation("  ⚠️ CategoryId VALUE: {CategoryIdValue} | TYPE: {CategoryIdType}", 
+                    createDto.CategoryId, 
+                    createDto.CategoryId.GetType().Name);
+
+                // Validate ModelState (automatic validation of DataAnnotations)
+                if (!ModelState.IsValid)
+                {
+                    // === LOGGING: Log ModelState errors ===
+                    _logger.LogWarning("❌ ModelState validation failed");
+                    var errors = ModelState.Values.SelectMany(v => v.Errors);
+                    foreach (var error in errors)
+                    {
+                        _logger.LogWarning("   - Error: {ErrorMessage}", error.ErrorMessage);
+                    }
+
+                    var errorMessage = string.Join("; ", errors.Select(e => e.ErrorMessage));
+                    return BadRequest(new { message = errorMessage });
+                }
+
+                _logger.LogInformation("✅ ModelState validation passed");
+
+                // Additional validation for CategoryId
+                if (createDto.CategoryId <= 0)
+                {
+                    _logger.LogWarning("⚠️ CategoryId validation failed: CategoryId <= 0 (Value: {CategoryId})", createDto.CategoryId);
+                    return BadRequest(new { message = "Vui lòng chọn một mục trong danh sách" });
+                }
+
+                _logger.LogInformation("✅ CategoryId validation passed (Value: {CategoryId})", createDto.CategoryId);
+
+                // Map DTO to Product model
+                var product = new Product
+                {
+                    Name = createDto.Name,
+                    Description = createDto.Description,
+                    Price = createDto.Price,
+                    Stock = createDto.Stock,
+                    ImageUrl = createDto.ImageUrl,
+                    CategoryId = createDto.CategoryId,
+                    Brand = createDto.Brand,
+                    Size = createDto.Size,
+                    Color = createDto.Color,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _logger.LogInformation("🔄 Mapped DTO to Product model, saving to database...");
+                var createdProduct = await _productRepository.CreateAsync(product);
+                _logger.LogInformation("✨ Product created successfully with ID: {ProductId}", createdProduct.Id);
+
+                return CreatedAtAction(nameof(GetProduct), new { id = createdProduct.Id }, createdProduct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Error occurred while creating product");
+                return StatusCode(500, new { message = "Error occurred while creating product" });
+            }
         }
 
         // PUT: api/Products/5
         [HttpPut("{id}")]
         public async Task<IActionResult> PutProduct(int id, Product product)
         {
-            if (id != product.Id)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(product).State = EntityState.Modified;
-
             try
             {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!ProductExists(id))
+                if (id != product.Id)
                 {
-                    return NotFound();
+                    return BadRequest(new { message = "ID mismatch" });
                 }
-                else
-                {
-                    throw;
-                }
-            }
 
-            return NoContent();
+                var exists = await _productRepository.ExistsAsync(id);
+                if (!exists)
+                {
+                    return NotFound(new { message = "Product not found" });
+                }
+
+                await _productRepository.UpdateAsync(product);
+                return NoContent();
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Product not found with ID: {ProductId}", id);
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while updating product with ID: {ProductId}", id);
+                return StatusCode(500, new { message = "Error occurred while updating product" });
+            }
         }
 
         // DELETE: api/Products/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteProduct(int id)
         {
-            var product = await _context.Products.FindAsync(id);
-            if (product == null)
+            try
             {
-                return NotFound();
+                var deleted = await _productRepository.DeleteAsync(id);
+                if (!deleted)
+                {
+                    return NotFound(new { message = "Product not found" });
+                }
+
+                return NoContent();
             }
-
-            _context.Products.Remove(product);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
-
-        private bool ProductExists(int id)
-        {
-            return _context.Products.Any(e => e.Id == id);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while deleting product with ID: {ProductId}", id);
+                return StatusCode(500, new { message = "Error occurred while deleting product" });
+            }
         }
     }
 }

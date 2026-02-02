@@ -14,6 +14,7 @@ import ApiTest from './pages/ApiTest';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Profile from './pages/Profile';
+import DebugAuth from './pages/DebugAuth';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 import './App.css';
@@ -59,6 +60,7 @@ function AppLayout() {
           } 
         />
         <Route path="/api-test" element={<ApiTest />} />
+        <Route path="/debug-auth" element={<DebugAuth />} />
       </Routes>
     </>
   );

@@ -20,9 +20,6 @@ export default function Navigation() {
       <div className="nav-top-bar">
         <div className="nav-container">
           <div className="nav-top-left">
-            <Link to="/" className="nav-logo">
-              👟 
-            </Link>
           </div>
           <div className="nav-top-right">
             <Link to="/stores" className="nav-top-link">

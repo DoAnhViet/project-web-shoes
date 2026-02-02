@@ -420,3 +420,30 @@
         gap: 12px;
     }
 }
+
+/* Order Actions */
+.order-actions {
+    padding: 15px 20px;
+    border-top: 1px solid #eee;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn-view-detail {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 24px;
+    background: #111;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.3s;
+}
+
+.btn-view-detail:hover {
+    background: #333;
+    transform: translateX(4px);
+}

@@ -9,12 +9,13 @@ function Home() {
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const { isAuthenticated } = useAuth();
-  const { getTotalItems } = useCart();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [featuredProduct, setFeaturedProduct] = useState(null);
+  const [sliderIndex, setSliderIndex] = useState(0);
+  const [email, setEmail] = useState('');
 
   useEffect(() => {
     const loadData = async () => {
@@ -67,8 +68,38 @@ function Home() {
         size: featuredProduct.size,
         color: featuredProduct.color
       }, 1);
-      alert('✓ Đã thêm vào giỏ hàng');
     }
+  };
+
+  // Slider controls
+  const productsPerPage = 4;
+  const totalSlides = Math.ceil(products.length / productsPerPage);
+  
+  const nextSlide = () => {
+    setSliderIndex((prev) => (prev + 1) % totalSlides);
+  };
+
+  const prevSlide = () => {
+    setSliderIndex((prev) => (prev - 1 + totalSlides) % totalSlides);
+  };
+
+  const currentProducts = products.slice(
+    sliderIndex * productsPerPage,
+    (sliderIndex + 1) * productsPerPage
+  );
+
+  // Newsletter subscribe
+  const handleSubscribe = (e) => {
+    e.preventDefault();
+    if (email) {
+      alert('🎉 Cảm ơn bạn đã đăng ký nhận tin!');
+      setEmail('');
+    }
+  };
+
+  // Scroll to products section
+  const scrollToProducts = () => {
+    document.querySelector('.collection-section')?.scrollIntoView({ behavior: 'smooth' });
   };
 
   return (
@@ -113,14 +144,14 @@ function Home() {
               <img src={featuredProduct.imageUrl} alt={featuredProduct.name} />
             </div>
           )}
-          <button className="explore-btn">
+          <button className="explore-btn" onClick={scrollToProducts}>
             <span>EXPLORE MORE</span>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M5 12h14"></path>
               <path d="m12 5 7 7-7 7"></path>
             </svg>
           </button>
-          <button className="scroll-down-btn">
+          <button className="scroll-down-btn" onClick={scrollToProducts}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 5v14"></path>
               <path d="m19 12-7 7-7-7"></path>
@@ -177,13 +208,17 @@ function Home() {
         <div className="products-slider">
           <div className="slider-controls">
             <div className="slider-dots">
-              {products.slice(0, 4).map((_, idx) => (
-                <span key={idx} className={`dot ${idx === 0 ? 'active' : ''}`}></span>
+              {Array.from({ length: totalSlides }).map((_, idx) => (
+                <span 
+                  key={idx} 
+                  className={`dot ${idx === sliderIndex ? 'active' : ''}`}
+                  onClick={() => setSliderIndex(idx)}
+                ></span>
               ))}
             </div>
             <div className="slider-arrows">
-              <button className="arrow-btn prev">←</button>
-              <button className="arrow-btn next">→ NEXT</button>
+              <button className="arrow-btn prev" onClick={prevSlide}>←</button>
+              <button className="arrow-btn next" onClick={nextSlide}>→ NEXT</button>
             </div>
           </div>
 
@@ -191,10 +226,10 @@ function Home() {
             <div className="loading">Loading...</div>
           ) : (
             <div className="products-grid">
-              {products.map(product => (
+              {currentProducts.map(product => (
                 <Link key={product.id} to={`/product/${product.id}`} style={{ textDecoration: 'none', color: 'inherit' }} className="product-link">
                   <div className="product-card">
-                    <span className="product-brand">{product.brand.toUpperCase()}</span>
+                    <span className="product-brand">{product.brand?.toUpperCase() || 'BRAND'}</span>
                     <h3 className="product-name">{product.name}</h3>
                     <p className="product-price">{formatPrice(product.price)}</p>
                     <div className="color-options">
@@ -223,10 +258,79 @@ function Home() {
         </div>
       </section>
 
+      {/* Newsletter Section */}
+      <section className="newsletter-section">
+        <div className="newsletter-content">
+          <div className="newsletter-text">
+            <h2>ĐĂNG KÝ NHẬN TIN</h2>
+            <p>Nhận thông báo về sản phẩm mới và ưu đãi đặc biệt</p>
+          </div>
+          <form className="newsletter-form" onSubmit={handleSubscribe}>
+            <input 
+              type="email" 
+              placeholder="Nhập email của bạn"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+            <button type="submit">ĐĂNG KÝ</button>
+          </form>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="footer">
-        <div className="footer-content">
-          <p>© 2026 ShoeStore. All rights reserved.</p>
+        <div className="footer-main">
+          <div className="footer-brand">
+            <h3 className="footer-logo">KICKS</h3>
+            <p className="footer-tagline">Your go-to destination for the latest and greatest in footwear fashion.</p>
+            <div className="footer-social">
+              <a href="#" className="social-icon">📘</a>
+              <a href="#" className="social-icon">📸</a>
+              <a href="#" className="social-icon">🐦</a>
+              <a href="#" className="social-icon">📺</a>
+            </div>
+          </div>
+
+          <div className="footer-links">
+            <div className="footer-column">
+              <h4>Sản Phẩm</h4>
+              <ul>
+                <li><Link to="/">Giày Nam</Link></li>
+                <li><Link to="/">Giày Nữ</Link></li>
+                <li><Link to="/">Giày Thể Thao</Link></li>
+                <li><Link to="/">Phụ Kiện</Link></li>
+              </ul>
+            </div>
+            <div className="footer-column">
+              <h4>Hỗ Trợ</h4>
+              <ul>
+                <li><Link to="/">Hướng Dẫn Mua Hàng</Link></li>
+                <li><Link to="/">Chính Sách Đổi Trả</Link></li>
+                <li><Link to="/">Vận Chuyển</Link></li>
+                <li><Link to="/">FAQ</Link></li>
+              </ul>
+            </div>
+            <div className="footer-column">
+              <h4>Về Chúng Tôi</h4>
+              <ul>
+                <li><Link to="/">Giới Thiệu</Link></li>
+                <li><Link to="/">Tuyển Dụng</Link></li>
+                <li><Link to="/">Liên Hệ</Link></li>
+                <li><Link to="/">Blog</Link></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        
+        <div className="footer-bottom">
+          <p>© 2026 KICKS. All rights reserved. Made with ❤️ in Vietnam</p>
+          <div className="footer-payments">
+            <span>💳 Visa</span>
+            <span>💳 Mastercard</span>
+            <span>📱 MoMo</span>
+            <span>🏦 VNPay</span>
+          </div>
         </div>
       </footer>
     </div>

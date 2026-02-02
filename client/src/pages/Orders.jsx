@@ -16,21 +16,22 @@ function Orders() {
 
     const getStatusBadge = (status) => {
         const statusMap = {
-            'pending': { label: 'Chờ xử lý', color: '#f59e0b' },
-            'confirmed': { label: 'Đã xác nhận', color: '#3b82f6' },
-            'shipping': { label: 'Đang giao', color: '#8b5cf6' },
-            'delivered': { label: 'Đã giao', color: '#10b981' },
-            'cancelled': { label: 'Đã hủy', color: '#ef4444' }
+            'pending': { label: 'Chờ xác nhận', color: '#f59e0b', icon: '⏳' },
+            'confirmed': { label: 'Đã xác nhận', color: '#3b82f6', icon: '✓' },
+            'shipping': { label: 'Đang giao', color: '#8b5cf6', icon: '🚚' },
+            'delivered': { label: 'Đã giao', color: '#10b981', icon: '✅' },
+            'cancelled': { label: 'Đã hủy', color: '#ef4444', icon: '✕' }
         };
-        const statusInfo = statusMap[status] || { label: status, color: '#6b7280' };
+        const statusInfo = statusMap[status] || { label: status, color: '#6b7280', icon: '•' };
         return statusInfo;
     };
 
     const getPaymentMethodLabel = (method) => {
         const methodMap = {
-            'cod': '💵 Thanh toán khi nhận hàng (COD)',
-            'bank': '🏦 Chuyển khoản ngân hàng',
-            'card': '💳 Thẻ tín dụng/Ghi nợ',
+            'cod': '💵 COD',
+            'bank': '🏦 Chuyển khoản',
+            'card': '💳 Thẻ tín dụng',
+            'momo': '📱 MoMo',
             'ewallet': '📱 Ví điện tử'
         };
         return methodMap[method] || method;
@@ -80,30 +81,40 @@ function Orders() {
             <div className="orders-list">
                 {orders.map((order) => {
                     const statusInfo = getStatusBadge(order.status);
+                    const orderId = order.orderId || order.id;
+                    const orderDate = order.orderDate ? new Date(order.orderDate).toLocaleDateString('vi-VN') : order.date;
+                    const customerInfo = order.shippingInfo || order.customerInfo || {};
+                    const items = order.items || [];
+                    const total = order.total || order.totalPrice || 0;
+                    const subtotal = order.subtotal || total;
+                    const shipping = order.shipping || 0;
+                    
                     return (
-                        <div key={order.id} className="order-card">
+                        <div key={orderId} className="order-card">
                             <div className="order-header">
                                 <div className="order-info">
-                                    <h3>Đơn hàng #{order.id}</h3>
-                                    <p className="order-date">{order.date}</p>
+                                    <h3>Đơn hàng #{orderId}</h3>
+                                    <p className="order-date">{orderDate}</p>
                                 </div>
                                 <div className="order-meta">
                                     <span
                                         className="order-status"
                                         style={{ backgroundColor: statusInfo.color }}
                                     >
-                                        {statusInfo.label}
+                                        {statusInfo.icon} {statusInfo.label}
                                     </span>
-                                    <span className="order-total">{formatPrice(order.totalPrice)}</span>
+                                    <span className="order-total">{formatPrice(total)}</span>
                                 </div>
                             </div>
 
                             <div className="order-customer">
                                 <h4>Thông tin giao hàng</h4>
-                                <p><strong>{order.customerInfo.fullName}</strong></p>
-                                <p>{order.customerInfo.address}</p>
-                                {order.customerInfo.city && <p>{order.customerInfo.city}</p>}
-                                <p>Điện thoại: {order.customerInfo.phone}</p>
+                                <p><strong>{customerInfo.fullName}</strong></p>
+                                <p>{customerInfo.address}</p>
+                                {(customerInfo.city || customerInfo.district) && (
+                                    <p>{customerInfo.ward}, {customerInfo.district}, {customerInfo.city}</p>
+                                )}
+                                <p>Điện thoại: {customerInfo.phone}</p>
                             </div>
 
                             <div className="order-payment-info">
@@ -126,14 +137,18 @@ function Orders() {
                             </div>
 
                             <div className="order-items">
-                                <h4>Sản phẩm ({order.items.length})</h4>
+                                <h4>Sản phẩm ({items.length})</h4>
                                 <div className="items-list">
-                                    {order.items.map((item, idx) => (
+                                    {items.map((item, idx) => (
                                         <div key={idx} className="order-item">
-                                            <img src={item.imageUrl} alt={item.name} />
+                                            <img src={item.imageUrl || item.image} alt={item.name} />
                                             <div className="item-info">
                                                 <p className="item-name">{item.name}</p>
-                                                <p className="item-variant">{item.brand} - Size: {item.size} - {item.color}</p>
+                                                <p className="item-variant">
+                                                    {item.brand && `${item.brand} - `}
+                                                    {item.size && `Size: ${item.size}`}
+                                                    {item.color && ` - ${item.color}`}
+                                                </p>
                                                 <p className="item-qty">Số lượng: {item.quantity}</p>
                                             </div>
                                             <div className="item-price">
@@ -148,17 +163,23 @@ function Orders() {
                             <div className="order-summary">
                                 <div className="summary-row">
                                     <span>Tạm tính:</span>
-                                    <span>{formatPrice(order.totalPrice)}</span>
+                                    <span>{formatPrice(subtotal)}</span>
                                 </div>
                                 <div className="summary-row">
                                     <span>Phí vận chuyển:</span>
-                                    <span>Miễn phí</span>
+                                    <span>{shipping === 0 ? 'Miễn phí' : formatPrice(shipping)}</span>
                                 </div>
                                 <div className="summary-divider"></div>
                                 <div className="summary-total">
                                     <span>Thành tiền:</span>
-                                    <span>{formatPrice(order.totalPrice)}</span>
+                                    <span>{formatPrice(total)}</span>
                                 </div>
+                            </div>
+
+                            <div className="order-actions">
+                                <Link to={`/order/${orderId}`} className="btn-view-detail">
+                                    Xem chi tiết →
+                                </Link>
                             </div>
                         </div>
                     );

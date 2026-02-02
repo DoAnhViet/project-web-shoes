@@ -6,10 +6,14 @@ import './Admin.css';
 function Admin() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showOrderModal, setShowOrderModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [orderFilter, setOrderFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('products');
   const [formData, setFormData] = useState({
     name: '',
@@ -35,8 +39,15 @@ function Admin() {
           productsApi.getAll(),
           categoriesApi.getAll()
         ]);
-        setProducts(productsRes.data);
-        setCategories(categoriesRes.data);
+        // Handle paged result format { items: [...] } or direct array
+        const productsData = productsRes.data?.items ?? productsRes.data ?? [];
+        const categoriesData = categoriesRes.data?.value ?? categoriesRes.data ?? [];
+        setProducts(productsData);
+        setCategories(categoriesData);
+        
+        // Load orders from localStorage
+        const storedOrders = JSON.parse(localStorage.getItem('orders') || '[]');
+        setOrders(storedOrders);
       } catch (error) {
         console.error('Error fetching data:', error);
       }
@@ -93,7 +104,7 @@ function Admin() {
 
       // Reload data
       const productsRes = await productsApi.getAll();
-      setProducts(productsRes.data);
+      setProducts(productsRes.data?.items ?? productsRes.data ?? []);
     } catch (error) {
       console.error('Error saving product:', error);
       alert('Có lỗi xảy ra: ' + (error.response?.data || error.message));
@@ -121,7 +132,7 @@ function Admin() {
       try {
         await productsApi.delete(id);
         const productsRes = await productsApi.getAll();
-        setProducts(productsRes.data);
+        setProducts(productsRes.data?.items ?? productsRes.data ?? []);
       } catch (error) {
         console.error('Error deleting product:', error);
       }
@@ -184,7 +195,7 @@ function Admin() {
 
       // Reload categories
       const categoriesRes = await categoriesApi.getAll();
-      setCategories(categoriesRes.data);
+      setCategories(categoriesRes.data?.value ?? categoriesRes.data ?? []);
     } catch (error) {
       console.error('Error saving category:', error);
       alert('Có lỗi xảy ra: ' + (error.response?.data || error.message));
@@ -205,7 +216,7 @@ function Admin() {
       try {
         await categoriesApi.delete(id);
         const categoriesRes = await categoriesApi.getAll();
-        setCategories(categoriesRes.data);
+        setCategories(categoriesRes.data?.value ?? categoriesRes.data ?? []);
       } catch (error) {
         console.error('Error deleting category:', error);
         alert('Không thể xóa danh mục này');
@@ -229,8 +240,83 @@ function Admin() {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
   };
 
-  const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
-  const totalValue = products.reduce((sum, p) => sum + (p.price * p.stock), 0);
+  // Order management functions
+  const getStatusInfo = (status) => {
+    const statusMap = {
+      pending: { label: 'Chờ xác nhận', color: 'orange', icon: '⏳' },
+      confirmed: { label: 'Đã xác nhận', color: 'blue', icon: '✓' },
+      shipping: { label: 'Đang giao hàng', color: 'purple', icon: '🚚' },
+      delivered: { label: 'Đã giao hàng', color: 'green', icon: '✅' },
+      cancelled: { label: 'Đã hủy', color: 'red', icon: '✕' }
+    };
+    return statusMap[status] || statusMap.pending;
+  };
+
+  const getPaymentMethodName = (method) => {
+    const methods = {
+      cod: 'COD',
+      bank: 'Chuyển khoản',
+      card: 'Thẻ',
+      momo: 'MoMo'
+    };
+    return methods[method] || method;
+  };
+
+  const handleViewOrder = (order) => {
+    setSelectedOrder(order);
+    setShowOrderModal(true);
+  };
+
+  const handleUpdateOrderStatus = (orderId, newStatus) => {
+    const updatedOrders = orders.map(order => {
+      if (order.orderId === orderId) {
+        const updates = { status: newStatus };
+        // Auto update payment status for delivered orders with COD
+        if (newStatus === 'delivered' && order.paymentMethod === 'cod') {
+          updates.paymentStatus = 'completed';
+        }
+        return { ...order, ...updates };
+      }
+      return order;
+    });
+    setOrders(updatedOrders);
+    localStorage.setItem('orders', JSON.stringify(updatedOrders));
+    
+    // Update selected order if viewing
+    if (selectedOrder?.orderId === orderId) {
+      const updated = updatedOrders.find(o => o.orderId === orderId);
+      setSelectedOrder(updated);
+    }
+  };
+
+  const handleUpdatePaymentStatus = (orderId, paymentStatus) => {
+    const updatedOrders = orders.map(order => 
+      order.orderId === orderId ? { ...order, paymentStatus } : order
+    );
+    setOrders(updatedOrders);
+    localStorage.setItem('orders', JSON.stringify(updatedOrders));
+    
+    if (selectedOrder?.orderId === orderId) {
+      setSelectedOrder({ ...selectedOrder, paymentStatus });
+    }
+  };
+
+  const filteredOrders = orderFilter === 'all' 
+    ? orders 
+    : orders.filter(o => o.status === orderFilter);
+
+  const orderStats = {
+    total: orders.length,
+    pending: orders.filter(o => o.status === 'pending').length,
+    confirmed: orders.filter(o => o.status === 'confirmed').length,
+    shipping: orders.filter(o => o.status === 'shipping').length,
+    delivered: orders.filter(o => o.status === 'delivered').length,
+    cancelled: orders.filter(o => o.status === 'cancelled').length,
+    totalRevenue: orders.filter(o => o.status === 'delivered').reduce((sum, o) => sum + (o.total || 0), 0)
+  };
+
+  const totalStock = Array.isArray(products) ? products.reduce((sum, p) => sum + (p?.stock || 0), 0) : 0;
+  const totalValue = Array.isArray(products) ? products.reduce((sum, p) => sum + ((p?.price || 0) * (p?.stock || 0)), 0) : 0;
 
   return (
     <div className="admin-container">
@@ -275,6 +361,17 @@ function Admin() {
             </svg>
             Categories
           </button>
+          <button
+            className={`nav-btn ${activeTab === 'orders' ? 'active' : ''}`}
+            onClick={() => setActiveTab('orders')}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"></path>
+              <path d="M15 3v4a2 2 0 0 0 2 2h4"></path>
+            </svg>
+            Orders
+            {orderStats.pending > 0 && <span className="badge">{orderStats.pending}</span>}
+          </button>
         </nav>
 
         <div className="sidebar-footer">
@@ -293,8 +390,8 @@ function Admin() {
         {/* Header */}
         <header className="content-header">
           <div className="header-left">
-            <h1>{activeTab === 'dashboard' ? 'Dashboard' : activeTab === 'products' ? 'Products' : 'Categories'}</h1>
-            <p className="header-subtitle">Manage your shoe store inventory</p>
+            <h1>{activeTab === 'dashboard' ? 'Dashboard' : activeTab === 'products' ? 'Products' : activeTab === 'orders' ? 'Orders' : 'Categories'}</h1>
+            <p className="header-subtitle">{activeTab === 'orders' ? 'Manage customer orders' : 'Manage your shoe store inventory'}</p>
           </div>
           <div className="header-right">
             {activeTab === 'products' && (
@@ -392,22 +489,26 @@ function Admin() {
         {activeTab === 'products' && (
           <div className="products-section">
             <div className="products-grid">
-              {products.map(product => (
+              {Array.isArray(products) && products.map(product => (
                 <div key={product.id} className="product-card">
                   <div className="product-image">
                     <img src={product.imageUrl} alt={product.name} />
-                    <div className="product-actions">
-                      <button className="action-btn edit" onClick={() => handleEdit(product)}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
-                        </svg>
+                    <div className="product-actions" style={{ opacity: 1, display: 'flex', position: 'absolute', top: '12px', right: '12px', gap: '8px', zIndex: 10 }}>
+                      <button 
+                        className="action-btn edit" 
+                        onClick={() => handleEdit(product)} 
+                        title="Chỉnh sửa"
+                        style={{ width: '36px', height: '36px', borderRadius: '50%', border: '2px solid #111', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}
+                      >
+                        ✏️
                       </button>
-                      <button className="action-btn delete" onClick={() => handleDelete(product.id)}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M3 6h18"></path>
-                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                        </svg>
+                      <button 
+                        className="action-btn delete" 
+                        onClick={() => handleDelete(product.id)} 
+                        title="Xoá"
+                        style={{ width: '36px', height: '36px', borderRadius: '50%', border: '2px solid #111', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}
+                      >
+                        ✕
                       </button>
                     </div>
                   </div>
@@ -435,7 +536,7 @@ function Admin() {
         {activeTab === 'categories' && (
           <div className="categories-section">
             <div className="categories-grid">
-              {categories.map(category => (
+              {Array.isArray(categories) && categories.map(category => (
                 <div key={category.id} className="category-card">
                   <div className="category-header">
                     <div className="category-icon">
@@ -444,18 +545,22 @@ function Admin() {
                         <path d="M7 7h.01"></path>
                       </svg>
                     </div>
-                    <div className="category-actions">
-                      <button className="action-btn edit" onClick={() => handleEditCategory(category)}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
-                        </svg>
+                    <div className="category-actions" style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        className="action-btn edit" 
+                        onClick={() => handleEditCategory(category)} 
+                        title="Chỉnh sửa"
+                        style={{ width: '36px', height: '36px', borderRadius: '50%', border: '2px solid #111', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}
+                      >
+                        ✏️
                       </button>
-                      <button className="action-btn delete" onClick={() => handleDeleteCategory(category.id)}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M3 6h18"></path>
-                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                        </svg>
+                      <button 
+                        className="action-btn delete" 
+                        onClick={() => handleDeleteCategory(category.id)} 
+                        title="Xoá"
+                        style={{ width: '36px', height: '36px', borderRadius: '50%', border: '2px solid #111', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}
+                      >
+                        ✕
                       </button>
                     </div>
                   </div>
@@ -467,6 +572,167 @@ function Admin() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Orders Tab */}
+        {activeTab === 'orders' && (
+          <div className="orders-section">
+            {/* Order Stats */}
+            <div className="order-stats-grid">
+              <div className="order-stat-card total">
+                <span className="stat-number">{orderStats.total}</span>
+                <span className="stat-label">Tổng đơn</span>
+              </div>
+              <div className="order-stat-card pending">
+                <span className="stat-number">{orderStats.pending}</span>
+                <span className="stat-label">Chờ xác nhận</span>
+              </div>
+              <div className="order-stat-card shipping">
+                <span className="stat-number">{orderStats.shipping}</span>
+                <span className="stat-label">Đang giao</span>
+              </div>
+              <div className="order-stat-card delivered">
+                <span className="stat-number">{orderStats.delivered}</span>
+                <span className="stat-label">Đã giao</span>
+              </div>
+              <div className="order-stat-card revenue">
+                <span className="stat-number">{formatPrice(orderStats.totalRevenue)}</span>
+                <span className="stat-label">Doanh thu</span>
+              </div>
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="order-filter-tabs">
+              <button 
+                className={`filter-tab ${orderFilter === 'all' ? 'active' : ''}`}
+                onClick={() => setOrderFilter('all')}
+              >
+                Tất cả ({orders.length})
+              </button>
+              <button 
+                className={`filter-tab ${orderFilter === 'pending' ? 'active' : ''}`}
+                onClick={() => setOrderFilter('pending')}
+              >
+                Chờ xác nhận ({orderStats.pending})
+              </button>
+              <button 
+                className={`filter-tab ${orderFilter === 'confirmed' ? 'active' : ''}`}
+                onClick={() => setOrderFilter('confirmed')}
+              >
+                Đã xác nhận ({orderStats.confirmed})
+              </button>
+              <button 
+                className={`filter-tab ${orderFilter === 'shipping' ? 'active' : ''}`}
+                onClick={() => setOrderFilter('shipping')}
+              >
+                Đang giao ({orderStats.shipping})
+              </button>
+              <button 
+                className={`filter-tab ${orderFilter === 'delivered' ? 'active' : ''}`}
+                onClick={() => setOrderFilter('delivered')}
+              >
+                Đã giao ({orderStats.delivered})
+              </button>
+              <button 
+                className={`filter-tab ${orderFilter === 'cancelled' ? 'active' : ''}`}
+                onClick={() => setOrderFilter('cancelled')}
+              >
+                Đã hủy ({orderStats.cancelled})
+              </button>
+            </div>
+
+            {/* Orders Table */}
+            {filteredOrders.length === 0 ? (
+              <div className="empty-orders">
+                <p>Không có đơn hàng nào</p>
+              </div>
+            ) : (
+              <div className="orders-table-wrapper">
+                <table className="orders-table">
+                  <thead>
+                    <tr>
+                      <th>Mã đơn</th>
+                      <th>Ngày đặt</th>
+                      <th>Khách hàng</th>
+                      <th>Sản phẩm</th>
+                      <th>Tổng tiền</th>
+                      <th>Thanh toán</th>
+                      <th>Trạng thái</th>
+                      <th>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredOrders.map(order => {
+                      const statusInfo = getStatusInfo(order.status);
+                      return (
+                        <tr key={order.orderId}>
+                          <td className="order-id-cell">
+                            <span className="order-id">{order.orderId}</span>
+                          </td>
+                          <td>
+                            {new Date(order.orderDate).toLocaleDateString('vi-VN')}
+                          </td>
+                          <td className="customer-cell">
+                            <span className="customer-name">{order.shippingInfo?.fullName}</span>
+                            <span className="customer-phone">{order.shippingInfo?.phone}</span>
+                          </td>
+                          <td className="items-cell">
+                            <span className="items-count">{order.items?.length} sản phẩm</span>
+                          </td>
+                          <td className="total-cell">
+                            <span className="order-total">{formatPrice(order.total)}</span>
+                          </td>
+                          <td>
+                            <span className={`payment-badge ${order.paymentStatus}`}>
+                              {getPaymentMethodName(order.paymentMethod)}
+                              {order.paymentStatus === 'completed' ? ' ✓' : ''}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`status-badge ${statusInfo.color}`}>
+                              {statusInfo.icon} {statusInfo.label}
+                            </span>
+                          </td>
+                          <td className="actions-cell">
+                            <button 
+                              className="view-btn"
+                              onClick={() => handleViewOrder(order)}
+                            >
+                              👁️ Xem
+                            </button>
+                            {order.status === 'pending' && (
+                              <button 
+                                className="confirm-btn"
+                                onClick={() => handleUpdateOrderStatus(order.orderId, 'confirmed')}
+                              >
+                                ✓ Xác nhận
+                              </button>
+                            )}
+                            {order.status === 'confirmed' && (
+                              <button 
+                                className="ship-btn"
+                                onClick={() => handleUpdateOrderStatus(order.orderId, 'shipping')}
+                              >
+                                🚚 Giao hàng
+                              </button>
+                            )}
+                            {order.status === 'shipping' && (
+                              <button 
+                                className="deliver-btn"
+                                onClick={() => handleUpdateOrderStatus(order.orderId, 'delivered')}
+                              >
+                                ✅ Đã giao
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -519,7 +785,7 @@ function Admin() {
                     className={errors.categoryId ? 'input-error' : ''}
                   >
                     <option value="">Select category</option>
-                    {categories.map(cat => (
+                    {Array.isArray(categories) && categories.map(cat => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
@@ -658,6 +924,126 @@ function Admin() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Order Detail Modal */}
+      {showOrderModal && selectedOrder && (
+        <div className="modal-overlay" onClick={() => setShowOrderModal(false)}>
+          <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Chi tiết đơn hàng #{selectedOrder.orderId}</h2>
+              <button className="close-btn" onClick={() => setShowOrderModal(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6 6 18"></path>
+                  <path d="m6 6 12 12"></path>
+                </svg>
+              </button>
+            </div>
+            <div className="order-modal-content">
+              {/* Order Info */}
+              <div className="order-info-grid">
+                <div className="info-section">
+                  <h4>Thông tin đơn hàng</h4>
+                  <p><strong>Mã đơn:</strong> {selectedOrder.orderId}</p>
+                  <p><strong>Ngày đặt:</strong> {new Date(selectedOrder.orderDate).toLocaleString('vi-VN')}</p>
+                  <p><strong>Trạng thái:</strong> 
+                    <select 
+                      value={selectedOrder.status}
+                      onChange={(e) => handleUpdateOrderStatus(selectedOrder.orderId, e.target.value)}
+                      className="status-select"
+                    >
+                      <option value="pending">Chờ xác nhận</option>
+                      <option value="confirmed">Đã xác nhận</option>
+                      <option value="shipping">Đang giao hàng</option>
+                      <option value="delivered">Đã giao hàng</option>
+                      <option value="cancelled">Đã hủy</option>
+                    </select>
+                  </p>
+                </div>
+                <div className="info-section">
+                  <h4>Khách hàng</h4>
+                  <p><strong>Họ tên:</strong> {selectedOrder.shippingInfo?.fullName}</p>
+                  <p><strong>SĐT:</strong> {selectedOrder.shippingInfo?.phone}</p>
+                  <p><strong>Email:</strong> {selectedOrder.shippingInfo?.email}</p>
+                </div>
+                <div className="info-section">
+                  <h4>Địa chỉ giao hàng</h4>
+                  <p>{selectedOrder.shippingInfo?.address}</p>
+                  <p>{selectedOrder.shippingInfo?.ward}, {selectedOrder.shippingInfo?.district}</p>
+                  <p>{selectedOrder.shippingInfo?.city}</p>
+                  {selectedOrder.shippingInfo?.note && <p><em>Ghi chú: {selectedOrder.shippingInfo.note}</em></p>}
+                </div>
+                <div className="info-section">
+                  <h4>Thanh toán</h4>
+                  <p><strong>Phương thức:</strong> {getPaymentMethodName(selectedOrder.paymentMethod)}</p>
+                  <p><strong>Trạng thái:</strong> 
+                    <select 
+                      value={selectedOrder.paymentStatus}
+                      onChange={(e) => handleUpdatePaymentStatus(selectedOrder.orderId, e.target.value)}
+                      className="status-select"
+                    >
+                      <option value="pending">Chưa thanh toán</option>
+                      <option value="completed">Đã thanh toán</option>
+                    </select>
+                  </p>
+                </div>
+              </div>
+
+              {/* Order Items */}
+              <div className="order-items-section">
+                <h4>Sản phẩm đặt hàng</h4>
+                <table className="order-items-table">
+                  <thead>
+                    <tr>
+                      <th>Sản phẩm</th>
+                      <th>Đơn giá</th>
+                      <th>SL</th>
+                      <th>Thành tiền</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedOrder.items?.map((item, idx) => (
+                      <tr key={idx}>
+                        <td className="item-cell">
+                          <img src={item.image} alt={item.name} />
+                          <div>
+                            <span className="item-name">{item.name}</span>
+                            {item.size && <span className="item-variant">Size: {item.size}</span>}
+                          </div>
+                        </td>
+                        <td>{formatPrice(item.price)}</td>
+                        <td>{item.quantity}</td>
+                        <td>{formatPrice(item.price * item.quantity)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Order Total */}
+              <div className="order-total-section">
+                <div className="total-row">
+                  <span>Tạm tính:</span>
+                  <span>{formatPrice(selectedOrder.subtotal)}</span>
+                </div>
+                <div className="total-row">
+                  <span>Phí vận chuyển:</span>
+                  <span>{selectedOrder.shipping === 0 ? 'Miễn phí' : formatPrice(selectedOrder.shipping)}</span>
+                </div>
+                {selectedOrder.discount > 0 && (
+                  <div className="total-row discount">
+                    <span>Giảm giá:</span>
+                    <span>-{formatPrice(selectedOrder.discount)}</span>
+                  </div>
+                )}
+                <div className="total-row grand-total">
+                  <span>Tổng cộng:</span>
+                  <span>{formatPrice(selectedOrder.total)}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

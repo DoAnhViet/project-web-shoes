@@ -166,4 +166,30 @@ public class AuthController : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
     }
+
+    [HttpPost("set-admin/{email}")]
+    [AllowAnonymous]
+    public async Task<ActionResult> SetAdmin(string email)
+    {
+        try
+        {
+            var user = await _userRepository.GetByEmailAsync(email);
+            if (user == null)
+            {
+                return NotFound(new { message = "User not found" });
+            }
+
+            user.Role = WebBanGiay.API.Models.UserRole.Admin;
+            await _userRepository.UpdateAsync(user);
+
+            _logger.LogInformation($"User {email} has been set as Admin");
+
+            return Ok(new { message = $"User {email} is now Admin", role = user.Role.ToString() });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Error setting admin: {ex.Message}");
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 }

@@ -239,5 +239,35 @@ namespace WebBanGiay.API.Controllers
                 return StatusCode(500, new { message = "Error occurred while deleting product" });
             }
         }
+
+        // PATCH: api/Products/{id}/image - Update product image (no auth required)
+        [HttpPatch("{id}/image")]
+        [AllowAnonymous]
+        public async Task<ActionResult> UpdateProductImage(int id, [FromBody] UpdateImageDto dto)
+        {
+            try
+            {
+                var product = await _productRepository.GetByIdAsync(id);
+                if (product == null)
+                {
+                    return NotFound(new { message = "Product not found" });
+                }
+
+                product.ImageUrl = dto.ImageUrl;
+                await _productRepository.UpdateAsync(product);
+
+                return Ok(new { message = "Image updated successfully", imageUrl = product.ImageUrl });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating product image");
+                return StatusCode(500, new { message = "Error updating product image" });
+            }
+        }
+    }
+
+    public class UpdateImageDto
+    {
+        public string ImageUrl { get; set; } = string.Empty;
     }
 }

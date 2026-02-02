@@ -138,14 +138,15 @@
   transition: all 0.3s ease;
 }
 
-.btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.profile-container .btn-primary {
+  background: #111;
   color: white;
 }
 
-.btn-primary:hover:not(:disabled) {
+.profile-container .btn-primary:hover:not(:disabled) {
+  background: #333;
   transform: translateY(-2px);
-  box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
 }
 
 .btn-secondary {

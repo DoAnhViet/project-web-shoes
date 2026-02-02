@@ -1,14 +1,31 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useNotification } from '../context/NotificationContext';
+import { useAuth } from '../context/AuthContext';
 import NotificationPanel from './NotificationPanel';
 import './Header.css';
 
 export default function Header() {
+  const navigate = useNavigate();
   const { getTotalItems } = useCart();
   const { notificationHistory } = useNotification();
+  const { user } = useAuth();
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Check if user is admin
+  const isAdmin = user?.role === 'Admin';
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`);
+      setSearchQuery('');
+      setIsSearchOpen(false);
+    }
+  };
 
   return (
     <header className="header">
@@ -20,19 +37,36 @@ export default function Header() {
         </Link>
       </div>
       <nav className="nav-menu">
-        <a href="#" className="nav-item">New & Featured</a>
-        <a href="#" className="nav-item">Men</a>
-        <a href="#" className="nav-item">Women</a>
-        <a href="#" className="nav-item">Kids</a>
-        <a href="#" className="nav-item sale">Sale</a>
+        <Link to="/" className="nav-item">New & Featured</Link>
+        <Link to="/products/men" className="nav-item">Men</Link>
+        <Link to="/products/women" className="nav-item">Women</Link>
+        <Link to="/products/kids" className="nav-item">Kids</Link>
+        <Link to="/products/sale" className="nav-item sale">Sale</Link>
       </nav>
       <div className="header-actions">
-        <button className="icon-btn">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8"></circle>
-            <path d="m21 21-4.35-4.35"></path>
-          </svg>
-        </button>
+        {/* Search */}
+        <div className="search-container">
+          {isSearchOpen && (
+            <form onSubmit={handleSearch} className="search-form">
+              <input
+                type="text"
+                placeholder="Tìm kiếm sản phẩm..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                autoFocus
+              />
+            </form>
+          )}
+          <button 
+            className="icon-btn search-btn"
+            onClick={() => setIsSearchOpen(!isSearchOpen)}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+          </button>
+        </div>
         <button 
           className="icon-btn bell-icon" 
           title="Notifications"
@@ -52,7 +86,7 @@ export default function Header() {
           </svg>
           {getTotalItems() > 0 && <span className="cart-badge">{getTotalItems()}</span>}
         </Link>
-        <Link to="/admin" className="admin-link-btn">Admin</Link>
+        {isAdmin && <Link to="/admin" className="admin-link-btn">Admin</Link>}
       </div>
     </header>
   );

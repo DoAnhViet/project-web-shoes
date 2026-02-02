@@ -8,13 +8,15 @@ import NotificationDisplay from './components/NotificationDisplay';
 import Home from './pages/Home';
 import ProductDetail from './pages/ProductDetail';
 import Cart from './pages/Cart';
+import Checkout from './pages/Checkout';
+import OrderConfirmation from './pages/OrderConfirmation';
+import OrderDetail from './pages/OrderDetail';
 import Orders from './pages/Orders';
 import Admin from './pages/Admin';
-import ApiTest from './pages/ApiTest';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Profile from './pages/Profile';
-import DebugAuth from './pages/DebugAuth';
+import Products from './pages/Products';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 import './App.css';
@@ -31,6 +33,8 @@ function AppLayout() {
       <NotificationDisplay />
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/products" element={<Products />} />
+        <Route path="/products/:category" element={<Products />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route
@@ -43,6 +47,30 @@ function AppLayout() {
         />
         <Route path="/product/:id" element={<ProductDetail />} />
         <Route path="/cart" element={<Cart />} />
+        <Route
+          path="/checkout"
+          element={
+            <ProtectedRoute>
+              <Checkout />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/order-confirmation/:orderId"
+          element={
+            <ProtectedRoute>
+              <OrderConfirmation />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/order/:orderId"
+          element={
+            <ProtectedRoute>
+              <OrderDetail />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/orders"
           element={
@@ -58,9 +86,7 @@ function AppLayout() {
               <Admin />
             </AdminRoute>
           } 
-        />
-        <Route path="/api-test" element={<ApiTest />} />
-        <Route path="/debug-auth" element={<DebugAuth />} />
+                />
       </Routes>
     </>
   );

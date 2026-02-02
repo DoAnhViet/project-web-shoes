@@ -80,16 +80,35 @@ function Checkout() {
     // Simulate payment processing
     await new Promise(resolve => setTimeout(resolve, 1500));
     
+    const orderId = 'ORD' + Date.now().toString(36).toUpperCase();
+    
     const order = {
-      id: 'ORD' + Date.now().toString(36).toUpperCase(),
-      customerInfo: formData,
-      items: cart,
-      totalPrice: getTotalPrice(),
-      shippingFee,
-      totalAmount,
-      totalItems: getTotalItems(),
+      // Standard fields
+      orderId: orderId,
+      id: orderId,
+      orderDate: new Date().toISOString(),
       date: new Date().toISOString(),
-      dateFormatted: new Date().toLocaleString('vi-VN'),
+      
+      // Shipping info (both formats for compatibility)
+      shippingInfo: formData,
+      customerInfo: formData,
+      
+      // Items with normalized image field
+      items: cart.map(item => ({
+        ...item,
+        image: item.imageUrl || item.image
+      })),
+      
+      // Pricing
+      subtotal: getTotalPrice(),
+      totalPrice: getTotalPrice(),
+      shipping: shippingFee,
+      shippingFee: shippingFee,
+      total: totalAmount,
+      totalAmount: totalAmount,
+      discount: 0,
+      
+      totalItems: getTotalItems(),
       status: 'pending',
       paymentMethod,
       paymentStatus: paymentMethod === 'cod' ? 'pending' : 'completed'
@@ -101,7 +120,7 @@ function Checkout() {
     localStorage.setItem('orders', JSON.stringify(orders));
 
     clearCart();
-    navigate(`/order-confirmation/${order.id}`);
+    navigate(`/order-confirmation/${orderId}`);
   };
 
   if (cart.length === 0) {

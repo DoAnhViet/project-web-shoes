@@ -657,6 +657,25 @@
   padding: 0 10px;
 }
 
+.clear-invalid-orders {
+  margin-bottom: 20px;
+}
+
+.btn-clear-invalid {
+  padding: 10px 20px;
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-clear-invalid:hover {
+  background: #fecaca;
+}
+
 .order-stats-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);

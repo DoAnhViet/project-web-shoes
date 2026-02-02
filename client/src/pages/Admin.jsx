@@ -45,9 +45,23 @@ function Admin() {
         setProducts(productsData);
         setCategories(categoriesData);
         
-        // Load orders from localStorage
+        // Load orders from localStorage and normalize data
         const storedOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-        setOrders(storedOrders);
+        const normalizedOrders = storedOrders.map(order => ({
+          ...order,
+          // Normalize fields for compatibility
+          orderId: order.orderId || order.id,
+          orderDate: order.orderDate || order.date,
+          shippingInfo: order.shippingInfo || order.customerInfo,
+          total: order.total || order.totalAmount || order.totalPrice || 0,
+          subtotal: order.subtotal || order.totalPrice || 0,
+          shipping: order.shipping ?? order.shippingFee ?? 0,
+          items: (order.items || []).map(item => ({
+            ...item,
+            image: item.image || item.imageUrl
+          }))
+        }));
+        setOrders(normalizedOrders);
       } catch (error) {
         console.error('Error fetching data:', error);
       }
@@ -578,6 +592,24 @@ function Admin() {
         {/* Orders Tab */}
         {activeTab === 'orders' && (
           <div className="orders-section">
+            {/* Clear invalid orders button */}
+            {orders.some(o => !o.total || isNaN(o.total)) && (
+              <div className="clear-invalid-orders">
+                <button 
+                  onClick={() => {
+                    if (window.confirm('Xóa tất cả đơn hàng bị lỗi dữ liệu?')) {
+                      const validOrders = orders.filter(o => o.total && !isNaN(o.total));
+                      setOrders(validOrders);
+                      localStorage.setItem('orders', JSON.stringify(validOrders));
+                    }
+                  }}
+                  className="btn-clear-invalid"
+                >
+                  🗑️ Xóa đơn hàng lỗi ({orders.filter(o => !o.total || isNaN(o.total)).length})
+                </button>
+              </div>
+            )}
+
             {/* Order Stats */}
             <div className="order-stats-grid">
               <div className="order-stat-card total">

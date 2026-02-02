@@ -2,6 +2,7 @@ namespace WebBanGiay.API.Services
 {
     /// <summary>
     /// Singleton Logger Service - centralized logging across the application
+    /// Registered as a singleton in the DI container to ensure only one instance exists
     /// </summary>
     public interface ILoggerService
     {
@@ -12,31 +13,11 @@ namespace WebBanGiay.API.Services
 
     public class LoggerService : ILoggerService
     {
-        private static LoggerService? _instance;
-        private static readonly object _lock = new object();
         private readonly ILogger<LoggerService> _logger;
 
-        private LoggerService(ILogger<LoggerService> logger)
+        public LoggerService(ILogger<LoggerService> logger)
         {
             _logger = logger;
-        }
-
-        /// <summary>
-        /// Get or create singleton instance
-        /// </summary>
-        public static LoggerService GetInstance(ILogger<LoggerService> logger)
-        {
-            if (_instance == null)
-            {
-                lock (_lock)
-                {
-                    if (_instance == null)
-                    {
-                        _instance = new LoggerService(logger);
-                    }
-                }
-            }
-            return _instance;
         }
 
         public void LogInfo(string message)

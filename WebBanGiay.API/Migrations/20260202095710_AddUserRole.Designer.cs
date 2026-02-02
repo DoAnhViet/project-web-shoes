@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WebBanGiay.API.Data;
 
@@ -11,9 +12,11 @@ using WebBanGiay.API.Data;
 namespace WebBanGiay.API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260202095710_AddUserRole")]
+    partial class AddUserRole
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -127,7 +130,7 @@ namespace WebBanGiay.API.Migrations
                             Brand = "Nike",
                             CategoryId = 1,
                             Color = "Đen",
-                            CreatedAt = new DateTime(2026, 2, 2, 9, 57, 38, 505, DateTimeKind.Utc).AddTicks(7118),
+                            CreatedAt = new DateTime(2026, 2, 2, 9, 57, 9, 660, DateTimeKind.Utc).AddTicks(186),
                             Description = "Giày thể thao cao cấp Nike Air Max 270",
                             ImageUrl = "https://static.nike.com/a/images/c_limit,w_592,f_auto/t_product_v1/u3rcvb1r7e9bjpxynzfn/air-max-270-mens-shoes-KkLcGR.png",
                             Name = "Nike Air Max 270",
@@ -143,7 +146,7 @@ namespace WebBanGiay.API.Migrations
                             Brand = "Adidas",
                             CategoryId = 1,
                             Color = "Trắng",
-                            CreatedAt = new DateTime(2026, 2, 2, 9, 57, 38, 505, DateTimeKind.Utc).AddTicks(8843),
+                            CreatedAt = new DateTime(2026, 2, 2, 9, 57, 9, 660, DateTimeKind.Utc).AddTicks(1601),
                             Description = "Giày chạy bộ Adidas Ultraboost",
                             ImageUrl = "https://assets.adidas.com/images/h_840,f_auto,q_auto,fl_lossy,c_fill,g_auto/fbaf991a78bc4896a3e9ad7800abcec6_9366/Ultraboost_Light_Shoes_Black_GY9350_01_standard.jpg",
                             Name = "Adidas Ultraboost",
@@ -159,7 +162,7 @@ namespace WebBanGiay.API.Migrations
                             Brand = "Clarks",
                             CategoryId = 2,
                             Color = "Nâu",
-                            CreatedAt = new DateTime(2026, 2, 2, 9, 57, 38, 505, DateTimeKind.Utc).AddTicks(8850),
+                            CreatedAt = new DateTime(2026, 2, 2, 9, 57, 9, 660, DateTimeKind.Utc).AddTicks(1604),
                             Description = "Giày da Oxford cao cấp cho doanh nhân",
                             ImageUrl = "https://product.hstatic.net/200000033444/product/den_d_1_e7bb8cbe65014a1da5ca53e7b28cc42d_master.jpg",
                             Name = "Giày da Oxford",

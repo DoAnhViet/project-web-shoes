@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using WebBanGiay.API.DTOs;
 using WebBanGiay.API.Models;
 using WebBanGiay.API.Repositories.Interfaces;
+using WebBanGiay.API.Middleware;
 
 namespace WebBanGiay.API.Controllers
 {
@@ -103,6 +105,7 @@ namespace WebBanGiay.API.Controllers
 
         // POST: api/Products
         [HttpPost]
+        [RequireAdmin]
         public async Task<ActionResult<Product>> PostProduct([FromBody] ProductCreateDto createDto)
         {
             try
@@ -184,6 +187,7 @@ namespace WebBanGiay.API.Controllers
 
         // PUT: api/Products/5
         [HttpPut("{id}")]
+        [RequireAdmin]
         public async Task<IActionResult> PutProduct(int id, Product product)
         {
             try
@@ -216,6 +220,7 @@ namespace WebBanGiay.API.Controllers
 
         // DELETE: api/Products/5
         [HttpDelete("{id}")]
+        [RequireAdmin]
         public async Task<IActionResult> DeleteProduct(int id)
         {
             try

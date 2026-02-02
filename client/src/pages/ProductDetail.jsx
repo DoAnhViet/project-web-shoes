@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { productsApi } from '../api/api';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 import './ProductDetail.css';
 
 function ProductDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { addToCart } = useCart();
+    const { isAuthenticated } = useAuth();
     const [product, setProduct] = useState(null);
     const [loading, setLoading] = useState(true);
     const [quantity, setQuantity] = useState(1);
@@ -44,6 +46,15 @@ function ProductDetail() {
 
     const handleAddToCart = () => {
         setValidationError('');
+
+        // Check if user is logged in
+        if (!isAuthenticated) {
+            setValidationError('Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng');
+            setTimeout(() => {
+                navigate('/login');
+            }, 1500);
+            return;
+        }
 
         if (!selectedSize) {
             setValidationError('Vui lòng chọn kích cỡ');

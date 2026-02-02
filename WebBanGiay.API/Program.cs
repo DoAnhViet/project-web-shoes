@@ -1,9 +1,14 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 using WebBanGiay.API.Data;
 using WebBanGiay.API.Repositories.Interfaces;
 using WebBanGiay.API.Repositories.Implementations;
 using WebBanGiay.API.Observers;
 using WebBanGiay.API.Observers.Implementations;
+using WebBanGiay.API.Services;
+using WebBanGiay.API.Middleware;
 using DotNetEnv;
 
 // Load .env file from parent directory
@@ -33,6 +38,28 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+// Configure JWT Authentication
+var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+var secretKey = jwtSettings["SecretKey"] ?? "your-secret-key-min-32-chars-long!";
+var key = Encoding.ASCII.GetBytes(secretKey);
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(key),
+        ValidateIssuer = false,
+        ValidateAudience = false,
+        ClockSkew = TimeSpan.Zero
+    };
+});
+
 // Configure MySQL connection from environment variable
 var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING") 
     ?? builder.Configuration.GetConnectionString("DefaultConnection");
@@ -42,6 +69,14 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Register Repository Pattern with Dependency Injection
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IReviewRepository, ReviewRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+
+// Register Auth Services
+builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+
+// Register Logger Service as Singleton
+builder.Services.AddSingleton<ILoggerService, LoggerService>();
 
 // Register Observer Pattern
 // ReviewSubject is a singleton to maintain observer subscriptions across requests
@@ -80,10 +115,18 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger"; // Swagger UI at /swagger
 });
 
-app.UseHttpsRedirection();
+// Comment out HTTPS redirection for development
+// app.UseHttpsRedirection();
 
 app.UseCors("AllowReactApp");
 
+// Global exception handling middleware
+app.UseExceptionHandling();
+
+// JWT middleware for logging and custom processing
+app.UseJwtMiddleware();
+
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

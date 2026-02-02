@@ -1,10 +1,12 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { useNotification } from './NotificationContext';
 
 const CartContext = createContext();
 
 export function CartProvider({ children }) {
     const [cart, setCart] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const { addNotification } = useNotification();
 
     // Load cart from localStorage on mount
     useEffect(() => {
@@ -36,9 +38,10 @@ export function CartProvider({ children }) {
                     item.color === product.color
             );
 
+            let newCart;
             if (existingItem) {
                 // Update quantity if item already exists
-                return prevCart.map(item =>
+                newCart = prevCart.map(item =>
                     item.id === product.id &&
                         item.size === product.size &&
                         item.color === product.color
@@ -47,7 +50,7 @@ export function CartProvider({ children }) {
                 );
             } else {
                 // Add new item
-                return [
+                newCart = [
                     ...prevCart,
                     {
                         id: product.id,
@@ -62,6 +65,11 @@ export function CartProvider({ children }) {
                     }
                 ];
             }
+
+            // Show notification
+            addNotification(`✅ Đã thêm "${product.name}" vào giỏ hàng`, 3000);
+
+            return newCart;
         });
     };
 

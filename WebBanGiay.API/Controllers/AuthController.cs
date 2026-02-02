@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WebBanGiay.API.DTOs;
 using WebBanGiay.API.Services;
+using WebBanGiay.API.Repositories.Interfaces;
 
 namespace WebBanGiay.API.Controllers;
 
@@ -11,10 +12,14 @@ namespace WebBanGiay.API.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
+    private readonly IUserRepository _userRepository;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(IAuthService authService)
+    public AuthController(IAuthService authService, IUserRepository userRepository, ILogger<AuthController> logger)
     {
         _authService = authService;
+        _userRepository = userRepository;
+        _logger = logger;
     }
 
     [HttpPost("register")]
@@ -92,6 +97,73 @@ public class AuthController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return NotFound(new { message = ex.Message });
+        }
+    }
+
+    [HttpGet("check/{email}")]
+    [AllowAnonymous]
+    public async Task<ActionResult> CheckUserStatus(string email)
+    {
+        try
+        {
+            var user = await _userRepository.GetByEmailAsync(email);
+            if (user == null)
+            {
+                return Ok(new { found = false, message = "User not found in database" });
+            }
+
+            return Ok(new 
+            { 
+                found = true, 
+                email = user.Email,
+                fullName = user.FullName,
+                isActive = user.IsActive,
+                role = user.Role,
+                phone = user.Phone,
+                id = user.Id
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Error checking user: {ex.Message}");
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<ActionResult> ResetPassword([FromBody] dynamic request)
+    {
+        try
+        {
+            var email = request?.email?.ToString();
+            var newPassword = "huanvu210"; // Default password
+
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return BadRequest(new { message = "Email is required" });
+            }
+
+            var user = await _userRepository.GetByEmailAsync(email);
+            if (user == null)
+            {
+                return NotFound(new { message = "User not found" });
+            }
+
+            // Reset password
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            user.IsActive = true;
+
+            await _userRepository.UpdateAsync(user);
+
+            _logger.LogInformation($"Password reset for user: {email}, IsActive set to true");
+
+            return Ok(new { message = $"Password reset to '{newPassword}' and account activated" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Error resetting password: {ex.Message}");
+            return BadRequest(new { error = ex.Message });
         }
     }
 }

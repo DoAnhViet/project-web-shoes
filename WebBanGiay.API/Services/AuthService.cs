@@ -104,15 +104,30 @@ public class AuthService : IAuthService
         request.Email = request.Email?.Trim() ?? string.Empty;
         request.Password = request.Password?.Trim() ?? string.Empty;
 
+        _logger.LogInformation($"Login attempt for email: {request.Email}");
+
         var user = await _userRepository.GetByEmailAsync(request.Email);
 
-        if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        if (user == null)
         {
+            _logger.LogWarning($"Login failed: User not found for email {request.Email}");
+            throw new InvalidOperationException("Invalid email or password");
+        }
+
+        _logger.LogInformation($"User found: {user.Email}, IsActive: {user.IsActive}");
+
+        var passwordVerified = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
+        _logger.LogInformation($"Password verification result: {passwordVerified}");
+
+        if (!passwordVerified)
+        {
+            _logger.LogWarning($"Login failed: Invalid password for {request.Email}");
             throw new InvalidOperationException("Invalid email or password");
         }
 
         if (!user.IsActive)
         {
+            _logger.LogWarning($"Login failed: User account not active for {request.Email}");
             throw new InvalidOperationException("User account is not active");
         }
 

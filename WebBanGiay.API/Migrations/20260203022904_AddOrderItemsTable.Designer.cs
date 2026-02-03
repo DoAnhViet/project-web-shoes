@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WebBanGiay.API.Data;
 
@@ -11,9 +12,11 @@ using WebBanGiay.API.Data;
 namespace WebBanGiay.API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260203022904_AddOrderItemsTable")]
+    partial class AddOrderItemsTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,78 +24,6 @@ namespace WebBanGiay.API.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
-
-            modelBuilder.Entity("WebBanGiay.API.Models.Cart", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("SessionId")
-                        .HasMaxLength(100)
-                        .HasColumnType("varchar(100)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<int?>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SessionId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("Carts");
-                });
-
-            modelBuilder.Entity("WebBanGiay.API.Models.CartItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CartId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Color")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("varchar(50)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<decimal>("Price")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int>("ProductId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Size")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("varchar(20)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CartId");
-
-                    b.HasIndex("ProductId");
-
-                    b.ToTable("CartItems");
-                });
 
             modelBuilder.Entity("WebBanGiay.API.Models.Category", b =>
                 {
@@ -350,7 +281,7 @@ namespace WebBanGiay.API.Migrations
                             Brand = "Nike",
                             CategoryId = 1,
                             Color = "Đen",
-                            CreatedAt = new DateTime(2026, 2, 3, 2, 39, 54, 141, DateTimeKind.Utc).AddTicks(7860),
+                            CreatedAt = new DateTime(2026, 2, 3, 2, 29, 4, 671, DateTimeKind.Utc).AddTicks(6300),
                             Description = "Giày thể thao cao cấp Nike Air Max 270",
                             ImageUrl = "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500",
                             Name = "Nike Air Max 270",
@@ -366,7 +297,7 @@ namespace WebBanGiay.API.Migrations
                             Brand = "Adidas",
                             CategoryId = 1,
                             Color = "Trắng",
-                            CreatedAt = new DateTime(2026, 2, 3, 2, 39, 54, 141, DateTimeKind.Utc).AddTicks(9290),
+                            CreatedAt = new DateTime(2026, 2, 3, 2, 29, 4, 671, DateTimeKind.Utc).AddTicks(7590),
                             Description = "Giày chạy bộ Adidas Ultraboost",
                             ImageUrl = "https://images.unsplash.com/photo-1608231387042-66d1773070a5?w=500",
                             Name = "Adidas Ultraboost",
@@ -382,7 +313,7 @@ namespace WebBanGiay.API.Migrations
                             Brand = "Clarks",
                             CategoryId = 2,
                             Color = "Nâu",
-                            CreatedAt = new DateTime(2026, 2, 3, 2, 39, 54, 141, DateTimeKind.Utc).AddTicks(9290),
+                            CreatedAt = new DateTime(2026, 2, 3, 2, 29, 4, 671, DateTimeKind.Utc).AddTicks(7600),
                             Description = "Giày da Oxford cao cấp cho doanh nhân",
                             ImageUrl = "https://images.unsplash.com/photo-1614252369475-531eba835eb1?w=500",
                             Name = "Giày da Oxford",
@@ -471,34 +402,6 @@ namespace WebBanGiay.API.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("WebBanGiay.API.Models.Cart", b =>
-                {
-                    b.HasOne("WebBanGiay.API.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("WebBanGiay.API.Models.CartItem", b =>
-                {
-                    b.HasOne("WebBanGiay.API.Models.Cart", "Cart")
-                        .WithMany("CartItems")
-                        .HasForeignKey("CartId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("WebBanGiay.API.Models.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Cart");
-
-                    b.Navigation("Product");
-                });
-
             modelBuilder.Entity("WebBanGiay.API.Models.Order", b =>
                 {
                     b.HasOne("WebBanGiay.API.Models.User", "User")
@@ -547,11 +450,6 @@ namespace WebBanGiay.API.Migrations
                         .IsRequired();
 
                     b.Navigation("Product");
-                });
-
-            modelBuilder.Entity("WebBanGiay.API.Models.Cart", b =>
-                {
-                    b.Navigation("CartItems");
                 });
 
             modelBuilder.Entity("WebBanGiay.API.Models.Category", b =>

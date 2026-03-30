@@ -1,18 +1,15 @@
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './Navigation.css';
 
 export default function Navigation() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { user, logout, isAuthenticated } = useAuth();
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
-
-  const isActive = (path) => location.pathname === path;
 
   return (
     <nav className="navbar">

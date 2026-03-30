@@ -1,14 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import './Orders.css';
 
 function Orders() {
-    const [orders, setOrders] = useState([]);
-
-    useEffect(() => {
+    const [orders] = useState(() => {
         const savedOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-        setOrders(savedOrders.reverse()); // Show newest first
-    }, []);
+        return [...savedOrders].reverse(); // Show newest first
+    });
 
     const formatPrice = (price) => {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);

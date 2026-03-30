@@ -188,23 +188,38 @@ namespace WebBanGiay.API.Controllers
         // PUT: api/Products/5
         [HttpPut("{id}")]
         [RequireAdmin]
-        public async Task<IActionResult> PutProduct(int id, Product product)
+        public async Task<IActionResult> PutProduct(int id, [FromBody] ProductUpdateDto updateDto)
         {
             try
             {
-                if (id != product.Id)
+                _logger.LogInformation("📥 PUT /api/products/{Id} received", id);
+                
+                if (id != updateDto.Id)
                 {
                     return BadRequest(new { message = "ID mismatch" });
                 }
 
-                var exists = await _productRepository.ExistsAsync(id);
-                if (!exists)
+                var existingProduct = await _productRepository.GetByIdAsync(id);
+                if (existingProduct == null)
                 {
                     return NotFound(new { message = "Product not found" });
                 }
 
-                await _productRepository.UpdateAsync(product);
-                return NoContent();
+                // Update fields from DTO
+                existingProduct.Name = updateDto.Name;
+                existingProduct.Description = updateDto.Description;
+                existingProduct.Price = updateDto.Price;
+                existingProduct.Stock = updateDto.Stock;
+                existingProduct.ImageUrl = updateDto.ImageUrl;
+                existingProduct.CategoryId = updateDto.CategoryId;
+                existingProduct.Brand = updateDto.Brand;
+                existingProduct.Size = updateDto.Size;
+                existingProduct.Color = updateDto.Color;
+
+                await _productRepository.UpdateAsync(existingProduct);
+                _logger.LogInformation("✅ Product {Id} updated successfully", id);
+                
+                return Ok(existingProduct);
             }
             catch (KeyNotFoundException ex)
             {

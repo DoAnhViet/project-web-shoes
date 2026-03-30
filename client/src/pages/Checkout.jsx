@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { logger, PaymentService, OrderService, PriceCalculatorService } from '../services';
+import PriceBreakdown from '../components/PriceBreakdown';
 import './Checkout.css';
 
 function Checkout() {
@@ -9,6 +11,7 @@ function Checkout() {
   const { cart, clearCart, getTotalPrice, getTotalItems } = useCart();
   const { user } = useAuth();
   
+  const [isGuest, setIsGuest] = useState(!user);
   const [step, setStep] = useState(1); // 1: Shipping, 2: Payment, 3: Review
   const [formData, setFormData] = useState({
     fullName: user?.name || '',
@@ -31,13 +34,174 @@ function Checkout() {
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [errors, setErrors] = useState({});
+  const [paymentResult, setPaymentResult] = useState(null); // eslint-disable-line no-unused-vars
+  
+  // Coupon state
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState('');
+  
+  // Loyalty points state
+  const [pointsData, setPointsData] = useState(null);
+  const [pointsToRedeem, setPointsToRedeem] = useState(0);
+  const [pointsDiscount, setPointsDiscount] = useState(0);
+  const [pointsError, setPointsError] = useState('');
+
+  // Load user points
+  useEffect(() => {
+    const loadPoints = async () => {
+      if (!user?.id) return;
+      
+      try {
+        const response = await fetch(`http://localhost:5240/api/points/${user.id}`);
+        const data = await response.json();
+        setPointsData(data);
+      } catch (err) {
+        console.error('Error loading points:', err);
+      }
+    };
+    
+    loadPoints();
+  }, [user?.id]);
+
+  // Get payment methods from Factory
+  const paymentMethods = PaymentService.getPaymentMethods(); // eslint-disable-line no-unused-vars
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
   };
 
-  const shippingFee = getTotalPrice() >= 500000 ? 0 : 30000;
-  const totalAmount = getTotalPrice() + shippingFee;
+  // Apply coupon function
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) {
+      setCouponError('Vui lòng nhập mã giảm giá');
+      return;
+    }
+
+    setCouponLoading(true);
+    setCouponError('');
+
+    try {
+      const response = await fetch('http://localhost:5240/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: couponCode,
+          orderAmount: getTotalPrice()
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setCouponError(data.message || 'Mã giảm giá không hợp lệ');
+        setAppliedCoupon(null);
+      } else {
+        setAppliedCoupon(data);
+        setCouponError('');
+        logger.info('Coupon applied', data);
+      }
+    } catch (error) {
+      console.error('Error validating coupon:', error);
+      setCouponError('Không thể xác thực mã giảm giá');
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode('');
+    setCouponError('');
+  };
+
+  // Handle points redemption
+  const handleApplyPoints = () => {
+    setPointsError('');
+    
+    if (!pointsData || pointsData.points < 100) {
+      setPointsError('Cần tối thiểu 100 điểm để đổi');
+      return;
+    }
+    
+    if (pointsToRedeem % 100 !== 0) {
+      setPointsError('Điểm phải là bội số của 100');
+      return;
+    }
+    
+    if (pointsToRedeem > pointsData.points) {
+      setPointsError('Không đủ điểm');
+      return;
+    }
+    
+    // Calculate discount: 100 points = 10,000 VND
+    const discount = (pointsToRedeem / 100) * 10000;
+    setPointsDiscount(discount);
+    logger.info('Points applied', { points: pointsToRedeem, discount });
+  };
+
+  const removePoints = () => {
+    setPointsToRedeem(0);
+    setPointsDiscount(0);
+    setPointsError('');
+  };
+
+  // Calculate bulk discount for checkout
+  const calculateBulkDiscountTotal = () => {
+    let totalDiscount = 0;
+    console.log('🔍 Calculating bulk discounts for cart:', cart);
+    
+    cart.forEach(item => {
+      console.log('🔍 Item:', item.name, 'Quantity:', item.quantity, 'BulkRules:', item.bulkDiscountRules);
+      
+      if (!item.bulkDiscountRules) {
+        console.log('🔍 No bulk discount rules for:', item.name);
+        return;
+      }
+      
+      try {
+        const rules = JSON.parse(item.bulkDiscountRules);
+        const applicableRule = rules
+          .filter(rule => item.quantity >= rule.minQty)
+          .sort((a, b) => b.discount - a.discount)[0];
+        
+        if (applicableRule) {
+          const itemDiscount = (item.price * item.quantity * applicableRule.discount) / 100;
+          totalDiscount += itemDiscount;
+          console.log('🔍 Applied bulk discount:', applicableRule, 'Discount amount:', itemDiscount);
+        } else {
+          console.log('🔍 No applicable rule for quantity:', item.quantity);
+        }
+      } catch (e) {
+        console.error('Error parsing bulk discount rules:', e);
+      }
+    });
+    
+    console.log('🔍 Total bulk discount:', totalDiscount);
+    return totalDiscount;
+  };
+
+  // Use Decorator pattern for price calculation
+  const baseCalculation = PriceCalculatorService.calculateOrderTotal(cart, {
+    discountPercent: 0,
+    shippingFee: 30000,
+    freeShippingThreshold: 500000
+  });
+  
+  // Apply all discounts
+  const couponDiscount = appliedCoupon?.discountAmount || 0;
+  const bulkDiscount = calculateBulkDiscountTotal();
+  const priceCalculation = {
+    ...baseCalculation,
+    couponDiscount: couponDiscount,
+    bulkDiscount: bulkDiscount,
+    pointsDiscount: pointsDiscount,
+    total: baseCalculation.total - couponDiscount - bulkDiscount - pointsDiscount
+  };
+  
+  const shippingFee = priceCalculation.breakdown.find(s => s.step === 'Phí vận chuyển')?.added || 0;
+  const totalAmount = priceCalculation.finalPrice;
 
   const validateStep1 = () => {
     const newErrors = {};
@@ -76,51 +240,170 @@ function Checkout() {
 
   const handlePlaceOrder = async () => {
     setIsProcessing(true);
+    logger.info('Starting order placement', { paymentMethod, totalAmount });
     
-    // Simulate payment processing
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    const orderId = 'ORD' + Date.now().toString(36).toUpperCase();
-    
-    const order = {
-      // Standard fields
-      orderId: orderId,
-      id: orderId,
-      orderDate: new Date().toISOString(),
-      date: new Date().toISOString(),
+    try {
+      // Use Factory Pattern - Process payment
+      const paymentProcessResult = await PaymentService.processPayment(paymentMethod, {
+        id: 'ORD' + Date.now().toString(36).toUpperCase(),
+        amount: totalAmount,
+        customerInfo: formData
+      });
       
-      // Shipping info (both formats for compatibility)
-      shippingInfo: formData,
-      customerInfo: formData,
-      
-      // Items with normalized image field
-      items: cart.map(item => ({
-        ...item,
-        image: item.imageUrl || item.image
-      })),
-      
-      // Pricing
-      subtotal: getTotalPrice(),
-      totalPrice: getTotalPrice(),
-      shipping: shippingFee,
-      shippingFee: shippingFee,
-      total: totalAmount,
-      totalAmount: totalAmount,
-      discount: 0,
-      
-      totalItems: getTotalItems(),
-      status: 'pending',
-      paymentMethod,
-      paymentStatus: paymentMethod === 'cod' ? 'pending' : 'completed'
-    };
+      setPaymentResult(paymentProcessResult);
+      logger.info('Payment processed', paymentProcessResult);
 
-    // Save order
-    const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-    orders.push(order);
-    localStorage.setItem('orders', JSON.stringify(orders));
+      const orderId = 'ORD' + Date.now().toString(36).toUpperCase();
+      
+      // Calculate bulk discount before sending
+      const bulkDiscount = calculateBulkDiscountTotal();
+      const finalTotal = getTotalPrice() - bulkDiscount - couponDiscount - pointsDiscount + shippingFee;
+      
+      // Format data for API (CreateOrderDto)
+      const apiOrderData = {
+        fullName: formData.fullName,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+        city: formData.city,
+        district: formData.district,
+        ward: formData.ward,
+        note: formData.note,
+        paymentMethod: paymentMethod,
+        discount: bulkDiscount + couponDiscount + pointsDiscount,
+        items: cart.map(item => ({
+          productId: item.id,
+          productName: item.name,
+          productImage: item.imageUrl || item.image || '',
+          size: item.size || '',
+          color: item.color || '',
+          price: item.price,
+          quantity: item.quantity
+        }))
+      };
 
-    clearCart();
-    navigate(`/order-confirmation/${orderId}`);
+      // DIRECT API CALL - bypass OrderService for reliability
+      let createdOrder = null;
+      let confirmedOrderId = orderId;
+      
+      try {
+        console.log('📦 Sending order to API:', apiOrderData);
+        const response = await fetch('http://localhost:5240/api/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(apiOrderData)
+        });
+        
+        if (response.ok) {
+          createdOrder = await response.json();
+          confirmedOrderId = createdOrder.orderCode || orderId;
+          console.log('✅ Order created in database:', createdOrder);
+        } else {
+          const errorText = await response.text();
+          console.error('❌ API Error:', response.status, errorText);
+          throw new Error(`API Error: ${response.status}`);
+        }
+      } catch (apiError) {
+        console.error('❌ Failed to create order via API:', apiError);
+        // Continue with local order only
+      }
+
+      // Save to localStorage for user's order history
+      const localOrderData = {
+        orderId: confirmedOrderId,
+        id: createdOrder?.id || orderId,
+        orderCode: confirmedOrderId,
+        orderDate: new Date().toISOString(),
+        shippingInfo: formData,
+        items: cart.map(item => ({
+          ...item,
+          image: item.imageUrl || item.image
+        })),
+        subtotal: getTotalPrice(),
+        bulkDiscount: bulkDiscount,
+        couponDiscount: couponDiscount,
+        pointsDiscount: pointsDiscount,
+        shipping: shippingFee,
+        total: finalTotal,
+        status: 'pending',
+        paymentMethod,
+        paymentStatus: paymentProcessResult.status
+      };
+      
+      // Save to localStorage for order tracking
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      const orderKey = currentUser?.id ? `orders_user_${currentUser.id}` : 'orders_guest';
+      const existingOrders = JSON.parse(localStorage.getItem(orderKey) || '[]');
+      existingOrders.unshift(localOrderData);
+      localStorage.setItem(orderKey, JSON.stringify(existingOrders));
+      
+      // Also save to generic orders for admin
+      const allOrders = JSON.parse(localStorage.getItem('orders') || '[]');
+      allOrders.unshift(localOrderData);
+      localStorage.setItem('orders', JSON.stringify(allOrders));
+      
+      logger.info('Order created successfully', { orderId: confirmedOrderId });
+
+      // Apply coupon usage if coupon was used
+      if (appliedCoupon) {
+        try {
+          await fetch('http://localhost:5240/api/coupons/apply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: appliedCoupon.coupon.code })
+          });
+          logger.info('Coupon usage recorded', { code: appliedCoupon.coupon.code });
+        } catch (err) {
+          logger.error('Failed to record coupon usage', err);
+        }
+      }
+      
+      // Loyalty points handling (only for logged in users)
+      if (user?.id) {
+        // Redeem points if used
+        if (pointsToRedeem > 0) {
+          try {
+            await fetch('http://localhost:5240/api/points/redeem', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                userId: user.id, 
+                pointsToRedeem: pointsToRedeem 
+              })
+            });
+            logger.info('Points redeemed', { points: pointsToRedeem });
+          } catch (err) {
+            logger.error('Failed to redeem points', err);
+          }
+        }
+        
+        // Earn points from purchase
+        try {
+          await fetch('http://localhost:5240/api/points/earn', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: user.id,
+              orderAmount: getTotalPrice(),
+              orderCode: confirmedOrderId
+            })
+          });
+          logger.info('Points earned from purchase');
+        } catch (err) {
+          logger.error('Failed to earn points', err);
+        }
+      }
+
+      clearCart();
+      navigate(`/order-confirmation/${confirmedOrderId}`);
+    } catch (error) {
+      logger.error('Order placement failed', error);
+      alert('Có lỗi xảy ra khi đặt hàng. Vui lòng thử lại.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (cart.length === 0) {
@@ -164,6 +447,30 @@ function Checkout() {
       <div className="checkout-content">
         {/* Main Form */}
         <div className="checkout-main">
+          {/* Guest vs Login choice */}
+          {!user && step === 1 && (
+            <div className="checkout-section guest-choice">
+              <div className="guest-options">
+                <button 
+                  className={`guest-option ${isGuest ? 'active' : ''}`}
+                  onClick={() => setIsGuest(true)}
+                >
+                  <span>🛒</span>
+                  <strong>Tiếp tục với khách</strong>
+                  <small>Đặt hàng nhanh không cần tài khoản</small>
+                </button>
+                <button 
+                  className="guest-option"
+                  onClick={() => navigate('/login', { state: { from: '/checkout' } })}
+                >
+                  <span>👤</span>
+                  <strong>Đăng nhập</strong>
+                  <small>Lưu lại đơn hàng và theo dõi</small>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Step 1: Shipping */}
           {step === 1 && (
             <div className="checkout-section">
@@ -474,26 +781,104 @@ function Checkout() {
                 </div>
               ))}
             </div>
-            <div className="summary-totals">
-              <div className="summary-row">
-                <span>Tạm tính:</span>
-                <span>{formatPrice(getTotalPrice())}</span>
-              </div>
-              <div className="summary-row">
-                <span>Phí vận chuyển:</span>
-                <span>{shippingFee === 0 ? 'Miễn phí' : formatPrice(shippingFee)}</span>
-              </div>
-              {shippingFee > 0 && (
-                <p className="free-shipping-note">
-                  Miễn phí ship cho đơn hàng từ {formatPrice(500000)}
-                </p>
+            
+            {/* Coupon Input */}
+            <div className="coupon-section">
+              <h4>🎟️ Mã giảm giá</h4>
+              {!appliedCoupon ? (
+                <div className="coupon-input-group">
+                  <input
+                    type="text"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="Nhập mã giảm giá"
+                    disabled={couponLoading}
+                  />
+                  <button 
+                    onClick={handleApplyCoupon}
+                    disabled={couponLoading}
+                    className="btn-apply-coupon"
+                  >
+                    {couponLoading ? 'Đang xử lý...' : 'Áp dụng'}
+                  </button>
+                </div>
+              ) : (
+                <div className="coupon-applied">
+                  <div className="coupon-info">
+                    <span className="coupon-code">✓ {appliedCoupon.coupon.code}</span>
+                    <span className="coupon-desc">{appliedCoupon.coupon.description}</span>
+                  </div>
+                  <button onClick={removeCoupon} className="btn-remove-coupon">✕</button>
+                </div>
               )}
-              <div className="summary-divider"></div>
-              <div className="summary-total">
-                <span>Tổng cộng:</span>
-                <span>{formatPrice(totalAmount)}</span>
-              </div>
+              {couponError && <p className="coupon-error">{couponError}</p>}
             </div>
+            
+            {/* Loyalty Points Section - Only for logged in users */}
+            {user && pointsData && pointsData.points >= 100 && (
+              <div className="points-section">
+                <h4>🎁 Điểm Thưởng</h4>
+                <div className="points-balance-info">
+                  <span>Bạn có: <strong>{pointsData.points} điểm</strong></span>
+                </div>
+                {pointsDiscount === 0 ? (
+                  <div className="points-input-group">
+                    <input
+                      type="number"
+                      value={pointsToRedeem}
+                      onChange={(e) => setPointsToRedeem(parseInt(e.target.value) || 0)}
+                      placeholder="Nhập số điểm (bội số của 100)"
+                      min="100"
+                      step="100"
+                      max={pointsData.points}
+                    />
+                    <button 
+                      onClick={handleApplyPoints}
+                      className="btn-apply-points"
+                    >
+                      Đổi điểm
+                    </button>
+                  </div>
+                ) : (
+                  <div className="points-applied">
+                    <div className="points-info">
+                      <span className="points-used">✓ Dùng {pointsToRedeem} điểm</span>
+                      <span className="points-value">Giảm {formatPrice(pointsDiscount)}</span>
+                    </div>
+                    <button onClick={removePoints} className="btn-remove-points">✕</button>
+                  </div>
+                )}
+                {pointsError && <p className="points-error">{pointsError}</p>}
+                <small className="points-hint">💡 100 điểm = 10.000đ giảm giá</small>
+              </div>
+            )}
+            
+            {/* DECORATOR PATTERN - Price Breakdown Component */}
+            <PriceBreakdown items={cart} discountPercent={0} showDetails={true} />
+            
+            {/* Show coupon discount separately */}
+            {appliedCoupon && (
+              <div className="price-row coupon-discount-row">
+                <span>Giảm giá coupon:</span>
+                <span className="discount-value">-{formatPrice(couponDiscount)}</span>
+              </div>
+            )}
+            
+            {/* Show bulk discount */}
+            {bulkDiscount > 0 && (
+              <div className="price-row bulk-discount-row">
+                <span>🎁 Giảm giá số lượng:</span>
+                <span className="discount-value">-{formatPrice(bulkDiscount)}</span>
+              </div>
+            )}
+            
+            {/* Show points discount */}
+            {pointsDiscount > 0 && (
+              <div className="price-row points-discount-row">
+                <span>Giảm giá điểm thưởng:</span>
+                <span className="discount-value">-{formatPrice(pointsDiscount)}</span>
+              </div>
+            )}
           </div>
         </aside>
       </div>

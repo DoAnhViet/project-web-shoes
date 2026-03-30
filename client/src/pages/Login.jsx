@@ -57,7 +57,7 @@ export default function Login() {
       {/* Right Side - Form */}
       <div className="auth-form-side">
         <h1>Login</h1>
-        <a href="#" className="auth-subtitle">Forgot your password?</a>
+        <Link to="/forgot-password" className="auth-subtitle">Forgot your password?</Link>
 
         {(error || localError) && (
           <div className="error-message">{error || localError}</div>

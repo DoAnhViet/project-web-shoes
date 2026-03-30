@@ -152,7 +152,8 @@ namespace WebBanGiay.API.Controllers
                 // Calculate totals
                 var subtotal = dto.Items.Sum(i => i.Price * i.Quantity);
                 var shippingFee = subtotal >= 500000 ? 0 : 30000;
-                var total = subtotal + shippingFee;
+                var discount = dto.Discount; // Use discount from frontend (bulk + coupon + points)
+                var total = subtotal + shippingFee - discount;
 
                 // Create order
                 var order = new Order
@@ -168,7 +169,7 @@ namespace WebBanGiay.API.Controllers
                     Note = dto.Note,
                     Subtotal = subtotal,
                     ShippingFee = shippingFee,
-                    Discount = 0,
+                    Discount = discount,
                     Total = total,
                     PaymentMethod = dto.PaymentMethod,
                     PaymentStatus = dto.PaymentMethod == "cod" ? "pending" : "completed",

@@ -805,3 +805,24 @@
         padding: 16px;
     }
 }
+
+/* Bulk Discount Badge in Cart */
+.bulk-discount-badge {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ff8787 100%);
+    color: white;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.discount-row {
+    color: #c92a2a;
+    font-weight: 600;
+}
+
+.discount-value {
+    font-weight: 700;
+}

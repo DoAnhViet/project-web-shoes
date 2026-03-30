@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useNotification } from '../context/NotificationContext';
+import { ordersApi } from '../api/api';
 import './Orders.css';
 
 function Orders() {
     const [orders, setOrders] = useState([]);
+    const { addNotification } = useNotification();
 
     useEffect(() => {
         const savedOrders = JSON.parse(localStorage.getItem('orders') || '[]');
@@ -12,6 +15,38 @@ function Orders() {
 
     const formatPrice = (price) => {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
+    };
+
+    const handleCancelOrder = async (orderId) => {
+        if (!window.confirm('Bạn có chắc muốn hủy đơn hàng này?')) {
+            return;
+        }
+
+        let hasApiError = false;
+        try {
+            // Try to cancel via API first
+            await ordersApi.cancel(orderId);
+        } catch (error) {
+            console.error('API cancel failed, updating locally:', error);
+            hasApiError = true;
+        }
+
+        // Update local storage
+        const updatedOrders = orders.map(order => {
+            const currentOrderId = order.orderId || order.id;
+            if (currentOrderId === orderId) {
+                return { ...order, status: 'cancelled' };
+            }
+            return order;
+        });
+        setOrders(updatedOrders);
+        localStorage.setItem('orders', JSON.stringify(updatedOrders.reverse()));
+        
+        if (!hasApiError) {
+            addNotification('✅ Đơn hàng đã được hủy thành công', 3000);
+        } else {
+            addNotification('✅ Đơn hàng đã được hủy (chỉ cục bộ)', 3000);
+        }
     };
 
     const getStatusBadge = (status) => {
@@ -180,6 +215,14 @@ function Orders() {
                                 <Link to={`/order/${orderId}`} className="btn-view-detail">
                                     Xem chi tiết →
                                 </Link>
+                                {order.status === 'pending' && (
+                                    <button 
+                                        className="btn-cancel-order"
+                                        onClick={() => handleCancelOrder(orderId)}
+                                    >
+                                        🚫 Hủy đơn hàng
+                                    </button>
+                                )}
                             </div>
                         </div>
                     );

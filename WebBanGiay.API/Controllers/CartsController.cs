@@ -127,9 +127,9 @@ namespace WebBanGiay.API.Controllers
                 // Reload cart with products
                 cart = await GetCartWithProducts(cart.Id);
 
-                _logger.LogInformation("Item added to cart {CartId}", cart.Id);
+                _logger.LogInformation("Item added to cart {CartId}", cart!.Id);
 
-                return Ok(MapToResponseDto(cart!));
+                return Ok(MapToResponseDto(cart));
             }
             catch (Exception ex)
             {

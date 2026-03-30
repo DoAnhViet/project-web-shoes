@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { productsApi, categoriesApi } from '../api/api';
+import { productsApi, categoriesApi, ordersApi } from '../api/api';
+import { useNotification } from '../context/NotificationContext';
 import './Admin.css';
 
 function Admin() {
@@ -15,6 +16,7 @@ function Admin() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orderFilter, setOrderFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('products');
+  const { addNotification } = useNotification();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -32,6 +34,16 @@ function Admin() {
   });
   const [errors, setErrors] = useState({});
 
+  // Helper to safely format date
+  const formatDate = (dateValue, includeTime = false) => {
+    if (!dateValue) return 'N/A';
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) return 'N/A';
+    return includeTime 
+      ? date.toLocaleString('vi-VN')
+      : date.toLocaleDateString('vi-VN');
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -45,23 +57,96 @@ function Admin() {
         setProducts(productsData);
         setCategories(categoriesData);
         
-        // Load orders from localStorage and normalize data
-        const storedOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-        const normalizedOrders = storedOrders.map(order => ({
-          ...order,
-          // Normalize fields for compatibility
-          orderId: order.orderId || order.id,
-          orderDate: order.orderDate || order.date,
-          shippingInfo: order.shippingInfo || order.customerInfo,
-          total: order.total || order.totalAmount || order.totalPrice || 0,
-          subtotal: order.subtotal || order.totalPrice || 0,
-          shipping: order.shipping ?? order.shippingFee ?? 0,
-          items: (order.items || []).map(item => ({
-            ...item,
-            image: item.image || item.imageUrl
-          }))
-        }));
-        setOrders(normalizedOrders);
+        // Load orders from API first, fallback to localStorage
+        try {
+          const ordersRes = await ordersApi.getAll();
+          const apiOrders = ordersRes.data?.items || ordersRes.data || [];
+          const normalizedApiOrders = apiOrders.map(order => ({
+            orderId: order.orderCode || order.id,
+            orderDate: order.createdAt,
+            shippingInfo: {
+              fullName: order.fullName,
+              email: order.email,
+              phone: order.phone,
+              address: order.address,
+              city: order.city,
+              district: order.district,
+              ward: order.ward
+            },
+            total: order.total,
+            subtotal: order.subtotal,
+            shipping: order.shippingFee,
+            status: order.status,
+            paymentMethod: order.paymentMethod,
+            paymentStatus: order.paymentStatus,
+            items: (order.items || []).map(item => ({
+              id: item.productId,
+              name: item.productName,
+              image: item.productImage,
+              size: item.size,
+              color: item.color,
+              price: item.price,
+              quantity: item.quantity
+            }))
+          }));
+          
+          // Merge with localStorage orders (for offline created orders) - with validation
+          let localOrders = [];
+          try {
+            localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
+            // Check if localStorage has invalid orders, clear if so
+            const hasInvalidOrders = localOrders.some(order => 
+              !order || typeof order.total !== 'number' || isNaN(order.total)
+            );
+            if (hasInvalidOrders) {
+              console.warn('Found invalid orders in localStorage, clearing...');
+              localStorage.removeItem('orders');
+              localOrders = [];
+            }
+          } catch (e) {
+            console.error('Error parsing localStorage orders:', e);
+            localStorage.removeItem('orders');
+            localOrders = [];
+          }
+          
+          const validLocalOrders = localOrders.filter(local => {
+            // Validate local order has minimum required fields
+            return local.orderId && 
+                   local.shippingInfo && 
+                   typeof local.total === 'number' && 
+                   !isNaN(local.total) &&
+                   Array.isArray(local.items);
+          });
+          
+          const localOnlyOrders = validLocalOrders.filter(local => 
+            !normalizedApiOrders.some(api => api.orderId === local.orderId)
+          );
+          
+          setOrders([...normalizedApiOrders, ...localOnlyOrders]);
+        } catch (orderError) {
+          console.error('Error fetching orders from API, using localStorage:', orderError);
+          // Fallback to localStorage with validation
+          const storedOrders = JSON.parse(localStorage.getItem('orders') || '[]');
+          const normalizedOrders = storedOrders
+            .filter(order => order && typeof order === 'object') // Filter out invalid orders
+            .map(order => ({
+              ...order,
+              orderId: order.orderId || order.id || 'UNKNOWN',
+              orderDate: order.orderDate || order.date || new Date().toISOString(),
+              shippingInfo: order.shippingInfo || order.customerInfo || {},
+              total: Number(order.total || order.totalAmount || order.totalPrice) || 0,
+              subtotal: Number(order.subtotal || order.totalPrice) || 0,
+              shipping: Number(order.shipping ?? order.shippingFee) || 0,
+              items: Array.isArray(order.items) ? order.items.map(item => ({
+                ...item,
+                image: item.image || item.imageUrl || '',
+                price: Number(item.price) || 0,
+                quantity: Number(item.quantity) || 1
+              })) : []
+            }))
+            .filter(order => order.orderId !== 'UNKNOWN' && order.total >= 0); // Final validation
+          setOrders(normalizedOrders);
+        }
       } catch (error) {
         console.error('Error fetching data:', error);
       }
@@ -107,8 +192,10 @@ function Admin() {
 
       if (editingProduct) {
         await productsApi.update(editingProduct.id, { ...data, id: editingProduct.id });
+        addNotification(`✅ Đã cập nhật sản phẩm "${data.name}"`, 3000);
       } else {
         await productsApi.create(data);
+        addNotification(`✅ Đã thêm sản phẩm mới "${data.name}"`, 3000);
       }
 
       setShowModal(false);
@@ -121,7 +208,11 @@ function Admin() {
       setProducts(productsRes.data?.items ?? productsRes.data ?? []);
     } catch (error) {
       console.error('Error saving product:', error);
-      alert('Có lỗi xảy ra: ' + (error.response?.data || error.message));
+      const errorMsg = error.response?.data?.message 
+        || error.response?.data?.title
+        || error.message 
+        || 'Không thể lưu sản phẩm';
+      addNotification(`❌ Lỗi: ${errorMsg}`, 5000);
     }
   };
 
@@ -142,13 +233,16 @@ function Admin() {
   };
 
   const handleDelete = async (id) => {
+    const product = products.find(p => p.id === id);
     if (window.confirm('Bạn có chắc muốn xóa sản phẩm này?')) {
       try {
         await productsApi.delete(id);
+        addNotification(`🗑️ Đã xóa sản phẩm "${product?.name || id}"`, 3000);
         const productsRes = await productsApi.getAll();
         setProducts(productsRes.data?.items ?? productsRes.data ?? []);
       } catch (error) {
         console.error('Error deleting product:', error);
+        addNotification(`❌ Không thể xóa sản phẩm`, 5000);
       }
     }
   };
@@ -199,8 +293,10 @@ function Admin() {
     try {
       if (editingCategory) {
         await categoriesApi.update(editingCategory.id, categoryFormData);
+        addNotification(`✅ Đã cập nhật danh mục "${categoryFormData.name}"`, 3000);
       } else {
         await categoriesApi.create(categoryFormData);
+        addNotification(`✅ Đã thêm danh mục mới "${categoryFormData.name}"`, 3000);
       }
 
       setShowCategoryModal(false);
@@ -212,7 +308,7 @@ function Admin() {
       setCategories(categoriesRes.data?.value ?? categoriesRes.data ?? []);
     } catch (error) {
       console.error('Error saving category:', error);
-      alert('Có lỗi xảy ra: ' + (error.response?.data || error.message));
+      addNotification(`❌ Lỗi: ${error.response?.data?.message || error.message}`, 5000);
     }
   };
 
@@ -226,14 +322,16 @@ function Admin() {
   };
 
   const handleDeleteCategory = async (id) => {
+    const category = categories.find(c => c.id === id);
     if (window.confirm('Bạn có chắc muốn xóa danh mục này?')) {
       try {
         await categoriesApi.delete(id);
+        addNotification(`🗑️ Đã xóa danh mục "${category?.name || id}"`, 3000);
         const categoriesRes = await categoriesApi.getAll();
         setCategories(categoriesRes.data?.value ?? categoriesRes.data ?? []);
       } catch (error) {
         console.error('Error deleting category:', error);
-        alert('Không thể xóa danh mục này');
+        addNotification(`❌ Không thể xóa danh mục`, 5000);
       }
     }
   };
@@ -703,7 +801,7 @@ function Admin() {
                             <span className="order-id">{order.orderId}</span>
                           </td>
                           <td>
-                            {new Date(order.orderDate).toLocaleDateString('vi-VN')}
+                            {formatDate(order.orderDate)}
                           </td>
                           <td className="customer-cell">
                             <span className="customer-name">{order.shippingInfo?.fullName}</span>
@@ -979,7 +1077,7 @@ function Admin() {
                 <div className="info-section">
                   <h4>Thông tin đơn hàng</h4>
                   <p><strong>Mã đơn:</strong> {selectedOrder.orderId}</p>
-                  <p><strong>Ngày đặt:</strong> {new Date(selectedOrder.orderDate).toLocaleString('vi-VN')}</p>
+                  <p><strong>Ngày đặt:</strong> {formatDate(selectedOrder.orderDate, true)}</p>
                   <p><strong>Trạng thái:</strong> 
                     <select 
                       value={selectedOrder.status}

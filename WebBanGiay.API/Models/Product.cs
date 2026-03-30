@@ -35,5 +35,11 @@ namespace WebBanGiay.API.Models
         /// </summary>
         [JsonIgnore]
         public ICollection<Review> Reviews { get; set; } = new List<Review>();
+
+        /// <summary>
+        /// Bulk discount rules in JSON format: [{"minQty": 2, "discount": 5}, {"minQty": 5, "discount": 10}]
+        /// discount is percentage (5 = 5%)
+        /// </summary>
+        public string? BulkDiscountRules { get; set; }
     }
 }

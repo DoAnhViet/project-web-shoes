@@ -1,15 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import './OrderConfirmation.css';
 
 function OrderConfirmation() {
   const { orderId } = useParams();
-  const [order, setOrder] = useState(null);
-
-  useEffect(() => {
+  
+  const order = useMemo(() => {
     const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-    const foundOrder = orders.find(o => o.id === orderId);
-    setOrder(foundOrder);
+    return orders.find(o => o.id === orderId);
   }, [orderId]);
 
   const formatPrice = (price) => {

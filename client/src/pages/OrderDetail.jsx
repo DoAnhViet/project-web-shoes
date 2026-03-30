@@ -1,23 +1,68 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useNotification } from '../context/NotificationContext';
+import { ordersApi } from '../api/api';
 import './OrderDetail.css';
 
 const OrderDetail = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
+  const { addNotification } = useNotification();
 
   useEffect(() => {
-    const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-    const found = orders.find(o => o.orderId === orderId);
-    setOrder(found);
+    // Load order data on mount
+    const loadOrder = () => {
+      const orders = JSON.parse(localStorage.getItem('orders') || '[]');
+      const found = orders.find(o => o.orderId === orderId);
+      setOrder(found);
+    };
+    loadOrder();
   }, [orderId]);
+
+  const handleCancelOrder = async () => {
+    if (!window.confirm('Bạn có chắc muốn hủy đơn hàng này?')) {
+      return;
+    }
+
+    try {
+      // Try to cancel via API first
+      await ordersApi.cancel(orderId);
+      addNotification('✅ Đơn hàng đã được hủy thành công', 3000);
+    } catch (error) {
+      console.error('API cancel failed, updating locally:', error);
+    }
+
+    // Update local storage
+    const orders = JSON.parse(localStorage.getItem('orders') || '[]');
+    const updatedOrders = orders.map(o => {
+      const currentOrderId = o.orderId || o.id;
+      if (currentOrderId === orderId) {
+        return { ...o, status: 'cancelled' };
+      }
+      return o;
+    });
+    localStorage.setItem('orders', JSON.stringify(updatedOrders));
+    
+    // Update current order state
+    setOrder(prev => ({ ...prev, status: 'cancelled' }));
+    addNotification('✅ Đơn hàng đã được hủy', 3000);
+  };
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND'
     }).format(price);
+  };
+
+  const formatDate = (dateValue, includeTime = false) => {
+    if (!dateValue) return 'N/A';
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) return 'N/A';
+    return includeTime 
+      ? date.toLocaleString('vi-VN')
+      : date.toLocaleDateString('vi-VN');
   };
 
   const getStatusInfo = (status) => {
@@ -59,22 +104,6 @@ const OrderDetail = () => {
     }));
   };
 
-  const handleCancelOrder = () => {
-    if (order.status !== 'pending') {
-      alert('Chỉ có thể hủy đơn hàng khi đang ở trạng thái "Chờ xác nhận"');
-      return;
-    }
-
-    if (window.confirm('Bạn có chắc chắn muốn hủy đơn hàng này?')) {
-      const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-      const updatedOrders = orders.map(o => 
-        o.orderId === orderId ? { ...o, status: 'cancelled' } : o
-      );
-      localStorage.setItem('orders', JSON.stringify(updatedOrders));
-      setOrder({ ...order, status: 'cancelled' });
-    }
-  };
-
   if (!order) {
     return (
       <div className="order-detail-container">
@@ -93,9 +122,16 @@ const OrderDetail = () => {
   return (
     <div className="order-detail-container">
       {/* Back Button */}
-      <button className="back-button" onClick={() => navigate(-1)}>
-        ← Quay lại
-      </button>
+      <div className="header-actions">
+        <button className="back-button" onClick={() => navigate(-1)}>
+          ← Quay lại
+        </button>
+        {order.status === 'pending' && (
+          <button className="btn-cancel-order" onClick={handleCancelOrder}>
+            🚫 Hủy đơn hàng
+          </button>
+        )}
+      </div>
 
       {/* Order Header */}
       <div className="order-detail-header">
@@ -106,7 +142,7 @@ const OrderDetail = () => {
             <span className="order-id">{order.orderId}</span>
           </div>
           <p className="order-date">
-            Đặt ngày: {new Date(order.orderDate).toLocaleString('vi-VN')}
+            Đặt ngày: {formatDate(order.orderDate, true)}
           </p>
         </div>
         <div className="header-right">
@@ -266,7 +302,13 @@ const OrderDetail = () => {
               <div>
                 <p className="label">Dự kiến giao hàng</p>
                 <p className="date">
-                  {new Date(new Date(order.orderDate).getTime() + 3*24*60*60*1000).toLocaleDateString('vi-VN')} - {new Date(new Date(order.orderDate).getTime() + 5*24*60*60*1000).toLocaleDateString('vi-VN')}
+                  {(() => {
+                    const orderDate = new Date(order.orderDate);
+                    if (isNaN(orderDate.getTime())) return 'N/A';
+                    const from = new Date(orderDate.getTime() + 3*24*60*60*1000);
+                    const to = new Date(orderDate.getTime() + 5*24*60*60*1000);
+                    return `${from.toLocaleDateString('vi-VN')} - ${to.toLocaleDateString('vi-VN')}`;
+                  })()}
                 </p>
               </div>
             </div>

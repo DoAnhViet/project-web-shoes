@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { productsApi, reviewsApi } from '../api/api';
 import { useCart } from '../context/CartContext';
+import { useWishlist } from '../context/WishlistContext';
 import { useAuth } from '../context/AuthContext';
 import './ProductDetail.css';
 
@@ -9,6 +10,7 @@ function ProductDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { addToCart } = useCart();
+    const { toggleWishlist, isInWishlist } = useWishlist();
     const { isAuthenticated, user } = useAuth();
     const [product, setProduct] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -212,6 +214,21 @@ function ProductDetail() {
                         </div>
                     </div>
 
+                    {/* Bulk Discount Badges */}
+                    {product.bulkDiscountRules && (
+                        <div className="bulk-discount-section">
+                            <h4>🎁 Giảm giá theo số lượng</h4>
+                            <div className="discount-tiers">
+                                {JSON.parse(product.bulkDiscountRules).map((rule, idx) => (
+                                    <div key={idx} className="discount-tier">
+                                        <span className="tier-qty">Mua {rule.minQty}+</span>
+                                        <span className="tier-discount">-{rule.discount}%</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="product-description-section">
                         <h3>Mô tả sản phẩm</h3>
                         <p>{product.description}</p>
@@ -292,7 +309,12 @@ function ProductDetail() {
                                 Xem giỏ hàng →
                             </button>
                         )}
-                        <button className="btn-wishlist">♡ Yêu thích</button>
+                        <button 
+                            className={`btn-wishlist ${isInWishlist(product.id) ? 'active' : ''}`}
+                            onClick={() => toggleWishlist(product)}
+                        >
+                            {isInWishlist(product.id) ? '❤️ Đã yêu thích' : '♡ Yêu thích'}
+                        </button>
                     </div>
 
                     <div className="product-benefits">

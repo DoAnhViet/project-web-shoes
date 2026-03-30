@@ -18,6 +18,9 @@ namespace WebBanGiay.API.Data
         public DbSet<OrderItem> OrderItems { get; set; }
         public DbSet<Cart> Carts { get; set; }
         public DbSet<CartItem> CartItems { get; set; }
+        public DbSet<Coupon> Coupons { get; set; }
+        public DbSet<UserPoints> UserPoints { get; set; }
+        public DbSet<PointsTransaction> PointsTransactions { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -72,6 +75,43 @@ namespace WebBanGiay.API.Data
                 new Category { Id = 3, Name = "Giày sneaker", Description = "Giày sneaker phong cách" }
             );
 
+            // Seed coupons
+            modelBuilder.Entity<Coupon>().HasData(
+                new Coupon 
+                { 
+                    Id = 1, 
+                    Code = "WELCOME10", 
+                    Description = "Giảm 10% cho đơn hàng đầu tiên",
+                    DiscountType = "percent",
+                    DiscountValue = 10,
+                    MinOrderAmount = 0,
+                    UsageLimit = 0,
+                    IsActive = true
+                },
+                new Coupon 
+                { 
+                    Id = 2, 
+                    Code = "SAVE50K", 
+                    Description = "Giảm 50.000đ cho đơn từ 500.000đ",
+                    DiscountType = "fixed",
+                    DiscountValue = 50000,
+                    MinOrderAmount = 500000,
+                    UsageLimit = 100,
+                    IsActive = true
+                },
+                new Coupon 
+                { 
+                    Id = 3, 
+                    Code = "FREESHIP", 
+                    Description = "Miễn phí ship cho đơn từ 300.000đ",
+                    DiscountType = "fixed",
+                    DiscountValue = 30000,
+                    MinOrderAmount = 300000,
+                    UsageLimit = 0,
+                    IsActive = true
+                }
+            );
+
             // Seed products
             modelBuilder.Entity<Product>().HasData(
                 new Product
@@ -85,7 +125,8 @@ namespace WebBanGiay.API.Data
                     CategoryId = 1,
                     Brand = "Nike",
                     Size = "42",
-                    Color = "Đen"
+                    Color = "Đen",
+                    BulkDiscountRules = "[{\"minQty\":2,\"discount\":5},{\"minQty\":5,\"discount\":10}]"
                 },
                 new Product
                 {
@@ -98,7 +139,8 @@ namespace WebBanGiay.API.Data
                     CategoryId = 1,
                     Brand = "Adidas",
                     Size = "41",
-                    Color = "Trắng"
+                    Color = "Trắng",
+                    BulkDiscountRules = "[{\"minQty\":3,\"discount\":8},{\"minQty\":6,\"discount\":15}]"
                 },
                 new Product
                 {

@@ -135,6 +135,93 @@ namespace WebBanGiay.API.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WebBanGiay.API.Models.Coupon", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("DiscountType")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<decimal>("DiscountValue")
+                        .HasColumnType("decimal(65,30)");
+
+                    b.Property<DateTime?>("ExpiryDate")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<decimal>("MinOrderAmount")
+                        .HasColumnType("decimal(65,30)");
+
+                    b.Property<int>("UsageLimit")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UsedCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Coupons");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Code = "WELCOME10",
+                            CreatedAt = new DateTime(2026, 3, 30, 21, 5, 37, 524, DateTimeKind.Local).AddTicks(1110),
+                            Description = "Giảm 10% cho đơn hàng đầu tiên",
+                            DiscountType = "percent",
+                            DiscountValue = 10m,
+                            IsActive = true,
+                            MinOrderAmount = 0m,
+                            UsageLimit = 0,
+                            UsedCount = 0
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Code = "SAVE50K",
+                            CreatedAt = new DateTime(2026, 3, 30, 21, 5, 37, 524, DateTimeKind.Local).AddTicks(2230),
+                            Description = "Giảm 50.000đ cho đơn từ 500.000đ",
+                            DiscountType = "fixed",
+                            DiscountValue = 50000m,
+                            IsActive = true,
+                            MinOrderAmount = 500000m,
+                            UsageLimit = 100,
+                            UsedCount = 0
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Code = "FREESHIP",
+                            CreatedAt = new DateTime(2026, 3, 30, 21, 5, 37, 524, DateTimeKind.Local).AddTicks(2240),
+                            Description = "Miễn phí ship cho đơn từ 300.000đ",
+                            DiscountType = "fixed",
+                            DiscountValue = 30000m,
+                            IsActive = true,
+                            MinOrderAmount = 300000m,
+                            UsageLimit = 0,
+                            UsedCount = 0
+                        });
+                });
+
             modelBuilder.Entity("WebBanGiay.API.Models.Order", b =>
                 {
                     b.Property<int>("Id")
@@ -286,6 +373,39 @@ namespace WebBanGiay.API.Migrations
                     b.ToTable("OrderItems");
                 });
 
+            modelBuilder.Entity("WebBanGiay.API.Models.PointsTransaction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("OrderCode")
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("Points")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PointsTransactions");
+                });
+
             modelBuilder.Entity("WebBanGiay.API.Models.Product", b =>
                 {
                     b.Property<int>("Id")
@@ -299,6 +419,9 @@ namespace WebBanGiay.API.Migrations
 
                     b.Property<string>("Brand")
                         .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("BulkDiscountRules")
                         .HasColumnType("longtext");
 
                     b.Property<int>("CategoryId")
@@ -348,9 +471,10 @@ namespace WebBanGiay.API.Migrations
                             Id = 1,
                             AverageRating = 0m,
                             Brand = "Nike",
+                            BulkDiscountRules = "[{\"minQty\":2,\"discount\":5},{\"minQty\":5,\"discount\":10}]",
                             CategoryId = 1,
                             Color = "Đen",
-                            CreatedAt = new DateTime(2026, 2, 3, 2, 39, 54, 141, DateTimeKind.Utc).AddTicks(7860),
+                            CreatedAt = new DateTime(2026, 3, 30, 14, 5, 37, 524, DateTimeKind.Utc).AddTicks(2750),
                             Description = "Giày thể thao cao cấp Nike Air Max 270",
                             ImageUrl = "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500",
                             Name = "Nike Air Max 270",
@@ -364,9 +488,10 @@ namespace WebBanGiay.API.Migrations
                             Id = 2,
                             AverageRating = 0m,
                             Brand = "Adidas",
+                            BulkDiscountRules = "[{\"minQty\":3,\"discount\":8},{\"minQty\":6,\"discount\":15}]",
                             CategoryId = 1,
                             Color = "Trắng",
-                            CreatedAt = new DateTime(2026, 2, 3, 2, 39, 54, 141, DateTimeKind.Utc).AddTicks(9290),
+                            CreatedAt = new DateTime(2026, 3, 30, 14, 5, 37, 524, DateTimeKind.Utc).AddTicks(4100),
                             Description = "Giày chạy bộ Adidas Ultraboost",
                             ImageUrl = "https://images.unsplash.com/photo-1608231387042-66d1773070a5?w=500",
                             Name = "Adidas Ultraboost",
@@ -382,7 +507,7 @@ namespace WebBanGiay.API.Migrations
                             Brand = "Clarks",
                             CategoryId = 2,
                             Color = "Nâu",
-                            CreatedAt = new DateTime(2026, 2, 3, 2, 39, 54, 141, DateTimeKind.Utc).AddTicks(9290),
+                            CreatedAt = new DateTime(2026, 3, 30, 14, 5, 37, 524, DateTimeKind.Utc).AddTicks(4110),
                             Description = "Giày da Oxford cao cấp cho doanh nhân",
                             ImageUrl = "https://images.unsplash.com/photo-1614252369475-531eba835eb1?w=500",
                             Name = "Giày da Oxford",
@@ -460,6 +585,12 @@ namespace WebBanGiay.API.Migrations
                     b.Property<string>("Phone")
                         .HasColumnType("longtext");
 
+                    b.Property<string>("ResetToken")
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime?>("ResetTokenExpiry")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<int>("Role")
                         .HasColumnType("int");
 
@@ -469,6 +600,34 @@ namespace WebBanGiay.API.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("WebBanGiay.API.Models.UserPoints", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("LastUpdated")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Points")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TotalEarned")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TotalRedeemed")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("UserPoints");
                 });
 
             modelBuilder.Entity("WebBanGiay.API.Models.Cart", b =>

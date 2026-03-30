@@ -1,0 +1,145 @@
+.price-breakdown {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  padding: 20px;
+  margin: 16px 0;
+  border: 1px solid #dee2e6;
+}
+
+.breakdown-title {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.breakdown-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.breakdown-step {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 8px;
+  transition: transform 0.2s;
+}
+
+.breakdown-step:hover {
+  transform: translateX(4px);
+}
+
+.breakdown-step.has-savings {
+  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+}
+
+.step-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.step-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.step-note {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.step-values {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-savings {
+  color: #28a745;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.step-added {
+  color: #dc3545;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.step-value {
+  font-weight: 600;
+  color: #333;
+}
+
+.breakdown-divider {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #007bff, transparent);
+  margin: 16px 0;
+}
+
+.breakdown-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+  border-radius: 8px;
+  color: white;
+}
+
+.total-label {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.total-value {
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.breakdown-savings {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
+  border-radius: 8px;
+  color: #856404;
+}
+
+.savings-value {
+  font-weight: 700;
+  color: #28a745;
+}
+
+.breakdown-description {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.breakdown-description small {
+  color: #6c757d;
+  font-size: 12px;
+}
+
+/* Simple version */
+.price-breakdown-simple {
+  padding: 12px;
+}
+
+.price-final {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.price-value {
+  color: #007bff;
+}

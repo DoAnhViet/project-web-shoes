@@ -194,3 +194,82 @@
     width: 100%;
   }
 }
+
+/* Loyalty Points Card */
+.loyalty-points-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 16px;
+  padding: 25px;
+  margin-bottom: 25px;
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+}
+
+.loyalty-points-card h3 {
+  margin: 0 0 20px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.points-info {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.points-balance {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.points-number {
+  font-size: 48px;
+  font-weight: 700;
+}
+
+.points-label {
+  font-size: 20px;
+  opacity: 0.9;
+}
+
+.points-value {
+  font-size: 16px;
+  opacity: 0.9;
+}
+
+.points-stats {
+  display: flex;
+  gap: 30px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.stat-label {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.points-rates {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.points-rates small {
+  font-size: 13px;
+  opacity: 0.9;
+}

@@ -130,35 +130,105 @@ public class AuthController : ControllerBase
         }
     }
 
-    [HttpPost("reset-password")]
+    /// <summary>
+    /// Request password reset - generates token
+    /// POST /api/auth/forgot-password
+    /// </summary>
+    [HttpPost("forgot-password")]
     [AllowAnonymous]
-    public async Task<ActionResult> ResetPassword([FromBody] dynamic request)
+    public async Task<ActionResult> ForgotPassword([FromBody] ForgotPasswordDto request)
     {
         try
         {
-            var email = request?.email?.ToString();
-            var newPassword = "huanvu210"; // Default password
-
-            if (string.IsNullOrWhiteSpace(email))
+            if (string.IsNullOrWhiteSpace(request.Email))
             {
                 return BadRequest(new { message = "Email is required" });
             }
 
-            var user = await _userRepository.GetByEmailAsync(email);
+            var user = await _userRepository.GetByEmailAsync(request.Email);
             if (user == null)
             {
-                return NotFound(new { message = "User not found" });
+                // Don't reveal if user exists or not for security
+                return Ok(new { message = "If that email exists, a reset link has been sent." });
+            }
+
+            // Generate secure token
+            var token = Convert.ToBase64String(Guid.NewGuid().ToByteArray())
+                .Replace("+", "-").Replace("/", "_").Substring(0, 22);
+            
+            user.ResetToken = token;
+            user.ResetTokenExpiry = DateTime.UtcNow.AddHours(1); // Token valid for 1 hour
+            
+            await _userRepository.UpdateAsync(user);
+
+            // In production, send email here. For demo, return token directly.
+            _logger.LogInformation($"Password reset requested for: {request.Email}, Token: {token}");
+
+            return Ok(new { 
+                message = "Password reset link has been sent to your email.",
+                // DEMO ONLY - Remove in production
+                resetToken = token,
+                resetLink = $"/reset-password?token={token}&email={request.Email}"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Error requesting password reset: {ex.Message}");
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Reset password with token
+    /// POST /api/auth/reset-password
+    /// </summary>
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<ActionResult> ResetPassword([FromBody] ResetPasswordDto request)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.Email) || 
+                string.IsNullOrWhiteSpace(request.Token) || 
+                string.IsNullOrWhiteSpace(request.NewPassword))
+            {
+                return BadRequest(new { message = "Email, token, and new password are required" });
+            }
+
+            if (request.NewPassword.Length < 6)
+            {
+                return BadRequest(new { message = "Password must be at least 6 characters" });
+            }
+
+            var user = await _userRepository.GetByEmailAsync(request.Email);
+            if (user == null)
+            {
+                return BadRequest(new { message = "Invalid reset request" });
+            }
+
+            // Verify token
+            if (user.ResetToken != request.Token)
+            {
+                return BadRequest(new { message = "Invalid or expired reset token" });
+            }
+
+            // Check expiry
+            if (user.ResetTokenExpiry == null || user.ResetTokenExpiry < DateTime.UtcNow)
+            {
+                return BadRequest(new { message = "Reset token has expired. Please request a new one." });
             }
 
             // Reset password
-            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+            user.ResetToken = null;
+            user.ResetTokenExpiry = null;
             user.IsActive = true;
 
             await _userRepository.UpdateAsync(user);
 
-            _logger.LogInformation($"Password reset for user: {email}, IsActive set to true");
+            _logger.LogInformation($"Password reset successfully for user: {request.Email}");
 
-            return Ok(new { message = $"Password reset to '{newPassword}' and account activated" });
+            return Ok(new { message = "Password has been reset successfully. You can now login." });
         }
         catch (Exception ex)
         {

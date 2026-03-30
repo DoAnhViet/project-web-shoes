@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './Profile.css';
 
 export default function Profile() {
@@ -15,6 +15,29 @@ export default function Profile() {
     phone: user?.phone || '',
     address: user?.address || '',
   });
+  
+  // Loyalty points state
+  const [pointsData, setPointsData] = useState(null);
+  const [pointsLoading, setPointsLoading] = useState(true);
+
+  // Load loyalty points
+  useEffect(() => {
+    const loadPoints = async () => {
+      if (!user?.id) return;
+      
+      try {
+        const response = await fetch(`http://localhost:5240/api/points/${user.id}`);
+        const data = await response.json();
+        setPointsData(data);
+      } catch (err) {
+        console.error('Error loading points:', err);
+      } finally {
+        setPointsLoading(false);
+      }
+    };
+    
+    loadPoints();
+  }, [user?.id]);
 
   if (isLoading) {
     return <div className="profile-container">Đang tải...</div>;
@@ -74,6 +97,40 @@ export default function Profile() {
         {error && <div className="error-message">{error}</div>}
         {localError && <div className="error-message">{localError}</div>}
         {successMessage && <div className="success-message">{successMessage}</div>}
+
+        {/* Loyalty Points Card */}
+        <div className="loyalty-points-card">
+          <h3>🎁 Điểm Thưởng</h3>
+          {pointsLoading ? (
+            <p>Đang tải...</p>
+          ) : pointsData ? (
+            <div className="points-info">
+              <div className="points-balance">
+                <span className="points-number">{pointsData.points}</span>
+                <span className="points-label">điểm</span>
+              </div>
+              <div className="points-value">
+                ≈ {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(pointsData.redeemValue)} giảm giá
+              </div>
+              <div className="points-stats">
+                <div className="stat">
+                  <span className="stat-value">{pointsData.totalEarned}</span>
+                  <span className="stat-label">Tổng tích</span>
+                </div>
+                <div className="stat">
+                  <span className="stat-value">{pointsData.totalRedeemed}</span>
+                  <span className="stat-label">Đã đổi</span>
+                </div>
+              </div>
+              <div className="points-rates">
+                <small>💰 {pointsData.rates.earnRate}</small>
+                <small>🎁 {pointsData.rates.redeemRate}</small>
+              </div>
+            </div>
+          ) : (
+            <p>Không thể tải điểm thưởng</p>
+          )}
+        </div>
 
         {!isEditing ? (
           <div className="profile-info">

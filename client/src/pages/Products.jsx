@@ -13,8 +13,19 @@ function Products() {
   const { addToCart } = useCart();
   const { isAuthenticated } = useAuth();
   const [products, setProducts] = useState([]);
+  const [allProducts, setAllProducts] = useState([]); // Store all products for filtering
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('newest');
+  
+  // Advanced filters state
+  const [filters, setFilters] = useState({
+    priceMin: '',
+    priceMax: '',
+    brand: '',
+    size: '',
+    color: ''
+  });
+  const [showFilters, setShowFilters] = useState(false);
 
   const categoryNames = {
     'men': 'Giày Nam',
@@ -60,17 +71,8 @@ function Products() {
           );
         }
         
-        // Sort products
-        let sortedProducts = [...productsData];
-        if (sortBy === 'price-low') {
-          sortedProducts.sort((a, b) => a.price - b.price);
-        } else if (sortBy === 'price-high') {
-          sortedProducts.sort((a, b) => b.price - a.price);
-        } else if (sortBy === 'name') {
-          sortedProducts.sort((a, b) => a.name.localeCompare(b.name));
-        }
-        
-        setProducts(sortedProducts);
+        setAllProducts(productsData); // Store all products
+        applyFiltersAndSort(productsData); // Apply filters
       } catch (error) {
         console.error('Error fetching products:', error);
       } finally {
@@ -78,7 +80,66 @@ function Products() {
       }
     };
     loadProducts();
-  }, [category, sortBy, searchQuery]);
+  }, [category, searchQuery]);
+
+  // Apply filters and sorting whenever filters or sortBy changes
+  useEffect(() => {
+    if (allProducts.length > 0) {
+      applyFiltersAndSort(allProducts);
+    }
+  }, [filters, sortBy]);
+
+  const applyFiltersAndSort = (productsData) => {
+    let filtered = [...productsData];
+
+    // Filter by price range
+    if (filters.priceMin) {
+      filtered = filtered.filter(p => p.price >= parseFloat(filters.priceMin));
+    }
+    if (filters.priceMax) {
+      filtered = filtered.filter(p => p.price <= parseFloat(filters.priceMax));
+    }
+
+    // Filter by brand
+    if (filters.brand) {
+      filtered = filtered.filter(p => p.brand?.toLowerCase() === filters.brand.toLowerCase());
+    }
+
+    // Filter by size (if product has size field)
+    if (filters.size) {
+      filtered = filtered.filter(p => p.size?.includes(filters.size));
+    }
+
+    // Filter by color (if product has color field)
+    if (filters.color) {
+      filtered = filtered.filter(p => p.color?.toLowerCase().includes(filters.color.toLowerCase()));
+    }
+
+    // Sort products
+    if (sortBy === 'price-low') {
+      filtered.sort((a, b) => a.price - b.price);
+    } else if (sortBy === 'price-high') {
+      filtered.sort((a, b) => b.price - a.price);
+    } else if (sortBy === 'name') {
+      filtered.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    setProducts(filtered);
+  };
+
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      priceMin: '',
+      priceMax: '',
+      brand: '',
+      size: '',
+      color: ''
+    });
+  };
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -127,6 +188,13 @@ function Products() {
 
       {/* Filters */}
       <div className="filters-bar">
+        <button 
+          className="btn-toggle-filters"
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          🔍 {showFilters ? 'Ẩn bộ lọc' : 'Hiện bộ lọc'}
+        </button>
+        
         <div className="filter-group">
           <span>Sắp xếp:</span>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
@@ -137,6 +205,75 @@ function Products() {
           </select>
         </div>
       </div>
+
+      {/* Advanced Filters Panel */}
+      {showFilters && (
+        <div className="advanced-filters">
+          <div className="filter-section">
+            <h3>Giá</h3>
+            <div className="price-range">
+              <input
+                type="number"
+                placeholder="Từ"
+                value={filters.priceMin}
+                onChange={(e) => handleFilterChange('priceMin', e.target.value)}
+              />
+              <span>-</span>
+              <input
+                type="number"
+                placeholder="Đến"
+                value={filters.priceMax}
+                onChange={(e) => handleFilterChange('priceMax', e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="filter-section">
+            <h3>Thương hiệu</h3>
+            <select 
+              value={filters.brand} 
+              onChange={(e) => handleFilterChange('brand', e.target.value)}
+            >
+              <option value="">Tất cả</option>
+              <option value="Nike">Nike</option>
+              <option value="Adidas">Adidas</option>
+              <option value="Puma">Puma</option>
+              <option value="Converse">Converse</option>
+              <option value="Vans">Vans</option>
+            </select>
+          </div>
+
+          <div className="filter-section">
+            <h3>Size</h3>
+            <select 
+              value={filters.size} 
+              onChange={(e) => handleFilterChange('size', e.target.value)}
+            >
+              <option value="">Tất cả</option>
+              <option value="38">38</option>
+              <option value="39">39</option>
+              <option value="40">40</option>
+              <option value="41">41</option>
+              <option value="42">42</option>
+              <option value="43">43</option>
+            </select>
+          </div>
+
+          <div className="filter-section">
+            <h3>Màu sắc</h3>
+            <input
+              type="text"
+              placeholder="Nhập màu..."
+              value={filters.color}
+              onChange={(e) => handleFilterChange('color', e.target.value)}
+            />
+          </div>
+
+          <button className="btn-clear-filters" onClick={clearFilters}>
+            🗑️ Xóa bộ lọc
+          </button>
+        </div>
+      )}
 
       {/* Products Grid */}
       {loading ? (

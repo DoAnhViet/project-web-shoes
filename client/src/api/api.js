@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5001/api';
+const API_BASE_URL = 'http://localhost:5240/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -8,6 +8,28 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Add JWT token to requests
+api.interceptors.request.use(
+  (config) => {
+    // For orders, try both 'user' and 'currentUser' keys
+    let user = JSON.parse(localStorage.getItem('user') || 'null');
+    if (!user) {
+      user = JSON.parse(localStorage.getItem('currentUser') || 'null');
+    }
+    
+    if (user?.token) {
+      config.headers.Authorization = `Bearer ${user.token}`;
+    }
+    
+    // Log API calls for debugging
+    console.log('🔍 API Call:', config.method?.toUpperCase(), config.url, config.headers);
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 export const productsApi = {
   getAll: (params) => api.get('/products', { params }),

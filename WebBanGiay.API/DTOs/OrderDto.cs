@@ -14,6 +14,7 @@ namespace WebBanGiay.API.DTOs
         public string Ward { get; set; } = string.Empty;
         public string? Note { get; set; }
         public string PaymentMethod { get; set; } = "cod";
+        public decimal Discount { get; set; } = 0; // Bulk discount + coupon discount + points discount
         public List<OrderItemDto> Items { get; set; } = new List<OrderItemDto>();
     }
 

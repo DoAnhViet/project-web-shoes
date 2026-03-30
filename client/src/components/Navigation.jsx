@@ -12,7 +12,7 @@ export default function Navigation() {
     navigate('/login');
   };
 
-  const isActive = (path) => location.pathname === path;
+  const isActive = (path) => location.pathname === path; // eslint-disable-line no-unused-vars
 
   return (
     <nav className="navbar">

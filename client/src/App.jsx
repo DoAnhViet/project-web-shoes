@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-route
 import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { WishlistProvider } from './context/WishlistContext';
 import Navigation from './components/Navigation';
 import Header from './components/Header';
 import NotificationDisplay from './components/NotificationDisplay';
@@ -15,15 +16,18 @@ import Orders from './pages/Orders';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Profile from './pages/Profile';
 import Products from './pages/Products';
+import Wishlist from './pages/Wishlist';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 import './App.css';
 
 function AppLayout() {
   const location = useLocation();
-  const hideHeaderPages = ['/login', '/register'];
+  const hideHeaderPages = ['/login', '/register', '/forgot-password', '/reset-password'];
   const showHeader = !hideHeaderPages.includes(location.pathname);
 
   return (
@@ -37,6 +41,8 @@ function AppLayout() {
         <Route path="/products/:category" element={<Products />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route
           path="/profile"
           element={
@@ -47,14 +53,8 @@ function AppLayout() {
         />
         <Route path="/product/:id" element={<ProductDetail />} />
         <Route path="/cart" element={<Cart />} />
-        <Route
-          path="/checkout"
-          element={
-            <ProtectedRoute>
-              <Checkout />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/wishlist" element={<Wishlist />} />
+        <Route path="/checkout" element={<Checkout />} />
         <Route
           path="/order-confirmation/:orderId"
           element={
@@ -94,15 +94,17 @@ function AppLayout() {
 
 function App() {
   return (
-    <AuthProvider>
-      <NotificationProvider>
-        <CartProvider>
-          <Router>
-            <AppLayout />
-          </Router>
-        </CartProvider>
-      </NotificationProvider>
-    </AuthProvider>
+    <NotificationProvider>
+      <AuthProvider>
+        <WishlistProvider>
+          <CartProvider>
+            <Router>
+              <AppLayout />
+            </Router>
+          </CartProvider>
+        </WishlistProvider>
+      </AuthProvider>
+    </NotificationProvider>
   );
 }
 

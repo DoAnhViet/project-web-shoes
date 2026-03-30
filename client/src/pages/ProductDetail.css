@@ -466,6 +466,17 @@
     border-color: #1565c0;
 }
 
+.btn-wishlist.active {
+    background-color: #dc3545;
+    color: white;
+    border-color: #dc3545;
+}
+
+.btn-wishlist.active:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
 .product-benefits {
     display: flex;
     flex-direction: column;
@@ -829,4 +840,48 @@
     .review-form-actions button {
         width: 100%;
     }
+}
+
+/* Bulk Discount Section */
+.bulk-discount-section {
+    padding: 20px;
+    background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%);
+    border-radius: 12px;
+    margin: 20px 0;
+    border: 2px dashed #ff6b6b;
+}
+
+.bulk-discount-section h4 {
+    margin: 0 0 15px;
+    font-size: 16px;
+    color: #c92a2a;
+    font-weight: 600;
+}
+
+.discount-tiers {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.discount-tier {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #ff6b6b;
+    box-shadow: 0 2px 4px rgba(201, 42, 42, 0.1);
+}
+
+.tier-qty {
+    font-size: 14px;
+    color: #666;
+}
+
+.tier-discount {
+    font-size: 16px;
+    font-weight: 700;
+    color: #c92a2a;
 }

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../api/api';
+import { useNotification } from './NotificationContext';
 
 const AuthContext = createContext();
 
@@ -7,6 +8,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { loadUserNotifications, addNotification } = useNotification();
 
   // Load user from localStorage on mount
   useEffect(() => {
@@ -16,20 +18,25 @@ export function AuthProvider({ children }) {
         const token = localStorage.getItem('token');
         
         if (savedUser && token) {
-          setUser(JSON.parse(savedUser));
+          const userData = JSON.parse(savedUser);
+          setUser(userData);
           api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+          loadUserNotifications(userData.id);
+        } else {
+          loadUserNotifications(null);
         }
       } catch (err) {
         console.error('Error loading user:', err);
         localStorage.removeItem('user');
         localStorage.removeItem('token');
+        loadUserNotifications(null);
       } finally {
         setIsLoading(false);
       }
     };
 
     loadUser();
-  }, []);
+  }, [loadUserNotifications]);
 
   const register = useCallback(async (email, password, fullName, phone, address) => {
     try {
@@ -69,6 +76,10 @@ export function AuthProvider({ children }) {
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('token', token);
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      
+      // Load user-specific notifications
+      loadUserNotifications(userData.id);
+      addNotification(`👋 Chào mừng ${userData.fullName || userData.email}!`, 3000);
 
       return userData;
     } catch (err) {
@@ -76,14 +87,16 @@ export function AuthProvider({ children }) {
       setError(errorMessage);
       throw err;
     }
-  }, []);
+  }, [loadUserNotifications, addNotification]);
 
   const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem('user');
     localStorage.removeItem('token');
     delete api.defaults.headers.common['Authorization'];
-  }, []);
+    // Switch to guest notifications
+    loadUserNotifications(null);
+  }, [loadUserNotifications]);
 
   const updateProfile = useCallback(async (userData) => {
     try {

@@ -31,6 +31,43 @@ function Cart() {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
     };
 
+    // Calculate bulk discount for an item
+    const calculateBulkDiscount = (item) => {
+        if (!item.bulkDiscountRules) return 0;
+        
+        try {
+            const rules = JSON.parse(item.bulkDiscountRules);
+            // Find the highest applicable discount
+            const applicableRule = rules
+                .filter(rule => item.quantity >= rule.minQty)
+                .sort((a, b) => b.discount - a.discount)[0];
+            
+            if (applicableRule) {
+                return (item.price * item.quantity * applicableRule.discount) / 100;
+            }
+        } catch (e) {
+            console.error('Error parsing bulk discount rules:', e);
+        }
+        return 0;
+    };
+
+    // Calculate total with bulk discounts
+    const getTotalWithBulkDiscount = () => {
+        let total = 0;
+        let totalDiscount = 0;
+        
+        cart.forEach(item => {
+            const itemTotal = item.price * item.quantity;
+            const discount = calculateBulkDiscount(item);
+            total += itemTotal;
+            totalDiscount += discount;
+        });
+        
+        return { total, discount: totalDiscount, finalTotal: total - totalDiscount };
+    };
+
+    const priceBreakdown = getTotalWithBulkDiscount();
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({
@@ -111,7 +148,8 @@ function Cart() {
     // If the cart becomes empty while on the checkout form, hide checkout
     useEffect(() => {
         if (cart.length === 0 && showCheckout) {
-            setShowCheckout(false);
+            // Use setTimeout to avoid synchronous setState in effect
+            setTimeout(() => setShowCheckout(false), 0);
         }
     }, [cart.length, showCheckout]);
 
@@ -210,6 +248,12 @@ function Cart() {
                                         </span>
                                     </div>
                                     <p className="item-price">{formatPrice(item.price)}</p>
+                                    {/* Show bulk discount if applicable */}
+                                    {calculateBulkDiscount(item) > 0 && (
+                                        <div className="bulk-discount-badge">
+                                            🎁 Giảm {formatPrice(calculateBulkDiscount(item))}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="item-quantity">
                                     <button
@@ -496,8 +540,15 @@ function Cart() {
 
                         <div className="summary-row">
                             <span>Tạm tính:</span>
-                            <span>{formatPrice(getTotalPrice())}</span>
+                            <span>{formatPrice(priceBreakdown.total)}</span>
                         </div>
+
+                        {priceBreakdown.discount > 0 && (
+                            <div className="summary-row discount-row">
+                                <span>🎁 Giảm giá số lượng:</span>
+                                <span className="discount-value">-{formatPrice(priceBreakdown.discount)}</span>
+                            </div>
+                        )}
 
                         <div className="summary-row">
                             <span>Phí vận chuyển:</span>
@@ -508,7 +559,7 @@ function Cart() {
 
                         <div className="summary-total">
                             <span>Thành tiền:</span>
-                            <span className="total-price">{formatPrice(getTotalPrice())}</span>
+                            <span className="total-price">{formatPrice(priceBreakdown.finalTotal)}</span>
                         </div>
 
                         {!showCheckout && (

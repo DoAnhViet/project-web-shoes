@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import './Cart.css';
@@ -108,14 +108,10 @@ function Cart() {
         clearCart();
     };
 
-    // If the cart becomes empty while on the checkout form, hide checkout
-    useEffect(() => {
-        if (cart.length === 0 && showCheckout) {
-            setShowCheckout(false);
-        }
-    }, [cart.length, showCheckout]);
+    // If the cart becomes empty, the checkout form should no longer be shown
+    const effectiveShowCheckout = showCheckout && cart.length > 0;
 
-    if (cart.length === 0 && !showCheckout) {
+    if (cart.length === 0 && !effectiveShowCheckout) {
         return (
             <div className="cart-container">
                 <div className="cart-empty">
@@ -253,7 +249,7 @@ function Cart() {
                     </div>
 
                     {/* Checkout Form */}
-                    {showCheckout && (
+                    {effectiveShowCheckout && (
                         <div className="checkout-section">
                             <h2>Thông tin giao hàng</h2>
                             <form onSubmit={handleCheckout} className="checkout-form">
@@ -511,7 +507,7 @@ function Cart() {
                             <span className="total-price">{formatPrice(getTotalPrice())}</span>
                         </div>
 
-                        {!showCheckout && (
+                        {!effectiveShowCheckout && (
                             <button
                                 className="checkout-btn"
                                 onClick={() => setShowCheckout(true)}
@@ -520,7 +516,7 @@ function Cart() {
                             </button>
                         )}
 
-                        {showCheckout && (
+                        {effectiveShowCheckout && (
                             <button
                                 className="checkout-btn active"
                                 disabled

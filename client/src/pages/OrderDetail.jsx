@@ -1,17 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useReducer } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import './OrderDetail.css';
 
 const OrderDetail = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
-  const [order, setOrder] = useState(null);
+  const [, forceRender] = useReducer(c => c + 1, 0);
 
-  useEffect(() => {
-    const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-    const found = orders.find(o => o.orderId === orderId);
-    setOrder(found);
-  }, [orderId]);
+  const orders = JSON.parse(localStorage.getItem('orders') || '[]');
+  const order = orders.find(o => o.orderId === orderId);
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -71,7 +68,7 @@ const OrderDetail = () => {
         o.orderId === orderId ? { ...o, status: 'cancelled' } : o
       );
       localStorage.setItem('orders', JSON.stringify(updatedOrders));
-      setOrder({ ...order, status: 'cancelled' });
+      forceRender();
     }
   };
 

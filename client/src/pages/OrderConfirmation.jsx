@@ -1,16 +1,10 @@
-import { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import './OrderConfirmation.css';
 
 function OrderConfirmation() {
   const { orderId } = useParams();
-  const [order, setOrder] = useState(null);
-
-  useEffect(() => {
-    const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-    const foundOrder = orders.find(o => o.id === orderId);
-    setOrder(foundOrder);
-  }, [orderId]);
+  const orders = JSON.parse(localStorage.getItem('orders') || '[]');
+  const order = orders.find(o => o.id === orderId);
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);

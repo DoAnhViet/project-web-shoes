@@ -125,9 +125,10 @@ namespace WebBanGiay.API.Controllers
                 await _context.SaveChangesAsync();
 
                 // Reload cart with products
-                cart = await GetCartWithProducts(cart.Id);
+                var cartId = cart.Id;
+                cart = await GetCartWithProducts(cartId);
 
-                _logger.LogInformation("Item added to cart {CartId}", cart.Id);
+                _logger.LogInformation("Item added to cart {CartId}", cartId);
 
                 return Ok(MapToResponseDto(cart!));
             }

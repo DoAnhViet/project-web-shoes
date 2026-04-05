@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { ordersApi } from '../api/api';
 import './Cart.css';
 
 function Cart() {
@@ -51,19 +52,25 @@ function Cart() {
         return 0;
     };
 
-    // Calculate total with bulk discounts
+    // Calculate total with bulk discounts and sales
     const getTotalWithBulkDiscount = () => {
         let total = 0;
         let totalDiscount = 0;
+        let totalSaleDiscount = 0;
         
         cart.forEach(item => {
-            const itemTotal = item.price * item.quantity;
+            // Calculate sale price if applicable
+            const effectivePrice = item.saleDiscount ? item.price * (1 - item.saleDiscount / 100) : item.price;
+            const itemTotal = effectivePrice * item.quantity;
             const discount = calculateBulkDiscount(item);
+            const saleDiscount = item.saleDiscount ? (item.price - effectivePrice) * item.quantity : 0;
+            
             total += itemTotal;
             totalDiscount += discount;
+            totalSaleDiscount += saleDiscount;
         });
         
-        return { total, discount: totalDiscount, finalTotal: total - totalDiscount };
+        return { total, discount: totalDiscount, saleDiscount: totalSaleDiscount, finalTotal: total - totalDiscount };
     };
 
     const priceBreakdown = getTotalWithBulkDiscount();
@@ -123,23 +130,129 @@ function Cart() {
             alert('Bạn sẽ được chuyển hướng đến trang thanh toán');
         }
 
-        // Create order
-        const order = {
-            id: Math.random().toString(36).substr(2, 9),
-            customerInfo: formData,
-            items: cart,
-            totalPrice: getTotalPrice(),
-            totalItems: getTotalItems(),
-            date: new Date().toLocaleString('vi-VN'),
-            status: 'pending',
-            paymentMethod: formData.paymentMethod,
-            paymentStatus: formData.paymentMethod === 'cod' ? 'pending' : 'completed'
+        const discount = priceBreakdown.discount;
+        const subtotal = priceBreakdown.total;
+        const shippingFee = priceBreakdown.finalTotal >= 500000 ? 0 : 30000;
+        const total = priceBreakdown.finalTotal + shippingFee;
+        const paymentMethod = formData.paymentMethod === 'ewallet' ? 'momo' : formData.paymentMethod;
+
+        const apiPayload = {
+            fullName: formData.fullName,
+            email: formData.email,
+            phone: formData.phone,
+            address: formData.address,
+            city: formData.city,
+            district: formData.postalCode || '',
+            ward: '',
+            note: formData.note || '',
+            paymentMethod,
+            discount,
+            items: cart.map(item => ({
+                productId: item.id,
+                productName: item.name,
+                productImage: item.imageUrl || item.image || '',
+                size: item.size || '',
+                color: item.color || '',
+                price: item.price,
+                quantity: item.quantity
+            }))
         };
 
-        // Save order to localStorage
+        const customerInfo = {
+            fullName: formData.fullName,
+            email: formData.email,
+            phone: formData.phone,
+            address: formData.address,
+            city: formData.city,
+            district: formData.postalCode || '',
+            ward: '',
+            note: formData.note || ''
+        };
+
+        let order = {
+            id: Math.random().toString(36).substr(2, 9),
+            orderId: `ORD${Date.now().toString(36).toUpperCase()}`,
+            orderCode: null,
+            ...customerInfo,
+            customerInfo,
+            subtotal,
+            shippingFee,
+            discount,
+            total,
+            totalItems: cart.reduce((sum, item) => sum + item.quantity, 0),
+            totalPrice: total,
+            date: new Date().toLocaleString('vi-VN'),
+            paymentMethod,
+            paymentStatus: paymentMethod === 'cod' ? 'pending' : 'completed',
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            updatedAt: null,
+            items: cart.map(item => ({
+                id: item.id,
+                productId: item.id,
+                productName: item.name,
+                productImage: item.imageUrl || item.image || '',
+                size: item.size || '',
+                color: item.color || '',
+                price: item.price,
+                quantity: item.quantity,
+                lineTotal: item.price * item.quantity
+            }))
+        };
+
+        try {
+            const response = await ordersApi.create(apiPayload);
+            if (response?.data) {
+                const created = response.data;
+                order = {
+                    ...order,
+                    id: created.id,
+                    orderId: created.orderCode,
+                    orderCode: created.orderCode,
+                    userId: created.userId || null,
+                    subtotal: created.subtotal,
+                    shippingFee: created.shippingFee,
+                    discount: created.discount,
+                    total: created.total,
+                    totalPrice: created.total,
+                    totalItems: created.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || order.totalItems,
+                    status: created.status,
+                    paymentStatus: created.paymentStatus,
+                    createdAt: created.createdAt,
+                    date: new Date(created.createdAt).toLocaleString('vi-VN'),
+                    updatedAt: created.updatedAt,
+                    customerInfo,
+                    items: created.items.map(item => ({
+                        id: item.id,
+                        productId: item.productId,
+                        productName: item.productName,
+                        productImage: item.productImage,
+                        size: item.size,
+                        color: item.color,
+                        price: item.price,
+                        quantity: item.quantity,
+                        lineTotal: item.lineTotal
+                    }))
+                };
+            }
+        } catch (error) {
+            console.error('Error creating order via API:', error);
+            alert('Không thể lưu đơn vào hệ thống. Đơn hàng sẽ được lưu tạm trong trình duyệt.');
+        }
+
         const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-        orders.push(order);
+        orders.unshift(order);
         localStorage.setItem('orders', JSON.stringify(orders));
+        localStorage.setItem('lastOrderSync', Date.now().toString());
+
+        const adminNotifications = JSON.parse(localStorage.getItem('notifications_admin') || '[]');
+        adminNotifications.unshift({
+            id: `admin_${Date.now()}`,
+            message: `Đơn hàng mới ${order.orderId} vừa được đặt bởi ${formData.fullName}`,
+            timestamp: new Date().toISOString(),
+            orderId: order.orderId
+        });
+        localStorage.setItem('notifications_admin', JSON.stringify(adminNotifications));
 
         setOrderCreated(order);
         clearCart();
@@ -184,26 +297,28 @@ function Cart() {
                     <div className="order-summary-info">
                         <div className="info-group">
                             <h4>Giao tới:</h4>
-                            <p>{orderCreated.customerInfo.fullName}</p>
-                            <p>{orderCreated.customerInfo.address}</p>
-                            {orderCreated.customerInfo.city && <p>{orderCreated.customerInfo.city}</p>}
-                            <p>{orderCreated.customerInfo.phone}</p>
+                            <p>{orderCreated.customerInfo?.fullName || orderCreated.fullName}</p>
+                            <p>{orderCreated.customerInfo?.address || orderCreated.address}</p>
+                            {(orderCreated.customerInfo?.city || orderCreated.city) && <p>{orderCreated.customerInfo?.city || orderCreated.city}</p>}
+                            <p>{orderCreated.customerInfo?.phone || orderCreated.phone}</p>
                         </div>
                         <div className="info-group">
                             <h4>Tóm tắt đơn hàng:</h4>
-                            <p>{orderCreated.totalItems} sản phẩm</p>
-                            <p className="total-price">{formatPrice(orderCreated.totalPrice)}</p>
+                            <p>{orderCreated.totalItems || orderCreated.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0} sản phẩm</p>
+                            <p className="total-price">{formatPrice(orderCreated.totalPrice || orderCreated.total || 0)}</p>
                         </div>
                     </div>
 
                     <div className="success-actions">
                         <button
+                            type="button"
                             className="view-orders-btn"
                             onClick={() => navigate('/orders')}
                         >
                             Xem lịch sử đơn hàng
                         </button>
                         <button
+                            type="button"
                             className="continue-shopping-btn"
                             onClick={() => navigate('/')}
                         >
@@ -247,7 +362,21 @@ function Cart() {
                                             {item.color}
                                         </span>
                                     </div>
-                                    <p className="item-price">{formatPrice(item.price)}</p>
+                                    {item.saleDiscount > 0 ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <p className="item-price" style={{ textDecoration: 'line-through', color: '#999', margin: '0' }}>
+                                                {formatPrice(item.price)}
+                                            </p>
+                                            <p className="item-price" style={{ color: '#ff6b6b', margin: '0' }}>
+                                                {formatPrice(item.price * (1 - item.saleDiscount / 100))}
+                                            </p>
+                                            <span style={{ background: '#ff6b6b', color: '#fff', padding: '2px 6px', borderRadius: '3px', fontSize: '11px' }}>
+                                                -{item.saleDiscount}%
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <p className="item-price">{formatPrice(item.price)}</p>
+                                    )}
                                     {/* Show bulk discount if applicable */}
                                     {calculateBulkDiscount(item) > 0 && (
                                         <div className="bulk-discount-badge">
@@ -257,6 +386,7 @@ function Cart() {
                                 </div>
                                 <div className="item-quantity">
                                     <button
+                                        type="button"
                                         className="qty-btn"
                                         onClick={() => updateQuantity(item.id, item.size, item.color, item.quantity - 1)}
                                     >
@@ -271,6 +401,7 @@ function Cart() {
                                         className="qty-input"
                                     />
                                     <button
+                                        type="button"
                                         className="qty-btn"
                                         onClick={() => updateQuantity(item.id, item.size, item.color, item.quantity + 1)}
                                         disabled={item.quantity >= item.stock}
@@ -279,9 +410,13 @@ function Cart() {
                                     </button>
                                 </div>
                                 <div className="item-total">
-                                    {formatPrice(item.price * item.quantity)}
+                                    {item.saleDiscount ? 
+                                        formatPrice(item.price * (1 - item.saleDiscount / 100) * item.quantity)
+                                        : formatPrice(item.price * item.quantity)
+                                    }
                                 </div>
                                 <button
+                                    type="button"
                                     className="item-remove"
                                     onClick={() => removeFromCart(item.id, item.size, item.color)}
                                     title="Xóa khỏi giỏ hàng"
@@ -564,6 +699,7 @@ function Cart() {
 
                         {!showCheckout && (
                             <button
+                                type="button"
                                 className="checkout-btn"
                                 onClick={() => setShowCheckout(true)}
                             >
@@ -573,6 +709,7 @@ function Cart() {
 
                         {showCheckout && (
                             <button
+                                type="button"
                                 className="checkout-btn active"
                                 disabled
                             >
@@ -581,13 +718,15 @@ function Cart() {
                         )}
 
                         <button
+                            type="button"
                             className="continue-btn"
-                            onClick={() => window.location.href = '/'}
+                            onClick={() => navigate('/')}
                         >
                             Tiếp tục mua sắm
                         </button>
 
                         <button
+                            type="button"
                             className="clear-btn"
                             onClick={() => {
                                 if (window.confirm('Bạn có chắc muốn xóa toàn bộ giỏ hàng?')) {

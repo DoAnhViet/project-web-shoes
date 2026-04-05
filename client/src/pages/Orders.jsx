@@ -8,9 +8,42 @@ function Orders() {
     const [orders, setOrders] = useState([]);
     const { addNotification } = useNotification();
 
+    const loadStoredOrders = () => {
+        try {
+            const savedOrders = JSON.parse(localStorage.getItem('orders') || '[]');
+            // Sort by date (newest first)
+            const sortedOrders = [...savedOrders].sort((a, b) => {
+                const dateA = new Date(a.orderDate || a.createdAt || a.date || 0);
+                const dateB = new Date(b.orderDate || b.createdAt || b.date || 0);
+                return dateB - dateA; // Newest first
+            });
+            setOrders(sortedOrders);
+        } catch (error) {
+            console.error('Error loading orders from localStorage:', error);
+            setOrders([]);
+        }
+    };
+
     useEffect(() => {
-        const savedOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-        setOrders(savedOrders.reverse()); // Show newest first
+        loadStoredOrders();
+
+        const handleStorage = (event) => {
+            if (event.key === 'orders' || event.key === 'lastOrderSync') {
+                loadStoredOrders();
+            }
+        };
+
+        const handleFocus = () => {
+            loadStoredOrders();
+        };
+
+        window.addEventListener('storage', handleStorage);
+        window.addEventListener('focus', handleFocus);
+
+        return () => {
+            window.removeEventListener('storage', handleStorage);
+            window.removeEventListener('focus', handleFocus);
+        };
     }, []);
 
     const formatPrice = (price) => {
@@ -40,7 +73,8 @@ function Orders() {
             return order;
         });
         setOrders(updatedOrders);
-        localStorage.setItem('orders', JSON.stringify(updatedOrders.reverse()));
+        localStorage.setItem('orders', JSON.stringify(updatedOrders));
+        localStorage.setItem('lastOrderSync', Date.now().toString());
         
         if (!hasApiError) {
             addNotification('✅ Đơn hàng đã được hủy thành công', 3000);

@@ -9,6 +9,22 @@ const getCartKey = (userId) => {
     return userId ? `cart_user_${userId}` : 'cart_guest';
 };
 
+const parseSizeInventory = (sizeString) => {
+    if (!sizeString || typeof sizeString !== 'string') return {};
+    return sizeString
+        .split(',')
+        .map(entry => entry.trim())
+        .filter(Boolean)
+        .reduce((acc, entry) => {
+            const [sizePart, qtyPart] = entry.split(':').map(part => part.trim());
+            const qty = parseInt(qtyPart, 10);
+            if (sizePart) {
+                acc[sizePart] = Number.isNaN(qty) ? 0 : qty;
+            }
+            return acc;
+        }, {});
+};
+
 export function CartProvider({ children }) {
     const [cart, setCart] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -71,6 +87,9 @@ export function CartProvider({ children }) {
     // Add product to cart
     const addToCart = (product, quantity = 1) => {
         setCart(prevCart => {
+            const sizeInventory = product.sizeInventory || parseSizeInventory(product.size);
+            const selectedSizeStock = product.selectedSizeStock ?? (product.size ? (sizeInventory[product.size] ?? product.stock) : product.stock);
+
             const existingItem = prevCart.find(
                 item => item.id === product.id &&
                     item.size === product.size &&
@@ -79,16 +98,26 @@ export function CartProvider({ children }) {
 
             let newCart;
             if (existingItem) {
-                // Update quantity if item already exists
+                const newQuantity = Math.min(existingItem.quantity + quantity, selectedSizeStock);
+                if (newQuantity === existingItem.quantity) {
+                    addNotification(`⚠️ Không thể thêm thêm size ${product.size}. Chỉ còn ${selectedSizeStock} sản phẩm`, 4000);
+                    return prevCart;
+                }
+
                 newCart = prevCart.map(item =>
                     item.id === product.id &&
                         item.size === product.size &&
                         item.color === product.color
-                        ? { ...item, quantity: item.quantity + quantity }
+                        ? { ...item, quantity: newQuantity }
                         : item
                 );
             } else {
-                // Add new item
+                if (selectedSizeStock <= 0) {
+                    addNotification(`⚠️ Size ${product.size} đã hết hàng`, 4000);
+                    return prevCart;
+                }
+
+                const itemQuantity = Math.min(quantity, selectedSizeStock);
                 newCart = [
                     ...prevCart,
                     {
@@ -99,8 +128,10 @@ export function CartProvider({ children }) {
                         brand: product.brand,
                         size: product.size,
                         color: product.color,
-                        quantity,
-                        stock: product.stock,
+                        quantity: itemQuantity,
+                        stock: selectedSizeStock,
+                        sizeInventory,
+                        sizeString: product.size,
                         bulkDiscountRules: product.bulkDiscountRules
                     }
                 ];
@@ -160,9 +191,12 @@ export function CartProvider({ children }) {
         }
     };
 
-    // Get total price
+    // Get total price (with sale discount applied)
     const getTotalPrice = () => {
-        return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+        return cart.reduce((total, item) => {
+            const effectivePrice = item.saleDiscount ? item.price * (1 - item.saleDiscount / 100) : item.price;
+            return total + (effectivePrice * item.quantity);
+        }, 0);
     };
 
     // Get total items count

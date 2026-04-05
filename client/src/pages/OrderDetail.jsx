@@ -11,13 +11,31 @@ const OrderDetail = () => {
   const { addNotification } = useNotification();
 
   useEffect(() => {
-    // Load order data on mount
     const loadOrder = () => {
       const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-      const found = orders.find(o => o.orderId === orderId);
+      const found = orders.find(o => String(o.orderId) === String(orderId) || String(o.id) === String(orderId));
       setOrder(found);
     };
+
     loadOrder();
+
+    const handleStorage = (event) => {
+      if (event.key === 'orders' || event.key === 'lastOrderSync') {
+        loadOrder();
+      }
+    };
+
+    const handleFocus = () => {
+      loadOrder();
+    };
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [orderId]);
 
   const handleCancelOrder = async () => {

@@ -16,6 +16,7 @@ function Products() {
   const [allProducts, setAllProducts] = useState([]); // Store all products for filtering
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('newest');
+  const [activeSales, setActiveSales] = useState([]);
   
   // Advanced filters state
   const [filters, setFilters] = useState({
@@ -37,50 +38,96 @@ function Products() {
     'sneaker': 'Giày Sneaker'
   };
 
-  useEffect(() => {
-    const loadProducts = async () => {
-      try {
-        setLoading(true);
-        const params = {};
-        const catMap = {
-          'men': 4,
-          'women': 5,
-          'kids': 6,
-          'sale': 7,
-          'sports': 1,
-          'office': 2,
-          'sneaker': 3
-        };
-        if (category && catMap[category]) {
-          params.categoryId = catMap[category];
-        }
-        if (searchQuery) {
-          params.search = searchQuery;
-        }
-
-        const response = await productsApi.getAll(params);
-        let productsData = response.data?.items ?? response.data?.value ?? response.data ?? [];
-        
-        // Client-side search filter if API doesn't support search
-        if (searchQuery && productsData.length > 0) {
-          const query = searchQuery.toLowerCase();
-          productsData = productsData.filter(p => 
-            p.name?.toLowerCase().includes(query) ||
-            p.brand?.toLowerCase().includes(query) ||
-            p.description?.toLowerCase().includes(query)
-          );
-        }
-        
-        setAllProducts(productsData); // Store all products
-        applyFiltersAndSort(productsData); // Apply filters
-      } catch (error) {
-        console.error('Error fetching products:', error);
-      } finally {
-        setLoading(false);
+  const loadProducts = async () => {
+    try {
+      setLoading(true);
+      const params = {};
+      const catMap = {
+        'men': 4,
+        'women': 5,
+        'kids': 6,
+        'sale': 7,
+        'sports': 1,
+        'office': 2,
+        'sneaker': 3
+      };
+      if (category && category !== 'sale' && catMap[category]) {
+        params.categoryId = catMap[category];
       }
-    };
+      if (searchQuery) {
+        params.search = searchQuery;
+      }
+
+      const response = await productsApi.getAll(params);
+      let productsData = response.data?.items ?? response.data?.value ?? response.data ?? [];
+
+      // Load sales first so the sale category can filter correctly
+      loadActiveSales();
+
+      // Client-side search filter if API doesn't support search
+      if (searchQuery && productsData.length > 0) {
+        const query = searchQuery.toLowerCase();
+        productsData = productsData.filter(p => 
+          p.name?.toLowerCase().includes(query) ||
+          p.brand?.toLowerCase().includes(query) ||
+          p.description?.toLowerCase().includes(query)
+        );
+      }
+
+      // If this is the sale category page, only show products currently in active sales
+      if (category === 'sale') {
+        const sales = JSON.parse(localStorage.getItem('sales') || '[]');
+        const activeSalesIds = new Set(
+          sales
+            .filter(s => s.isActive === true)
+            .flatMap(s => s.productIds.map(String))
+        );
+        productsData = productsData.filter(p => activeSalesIds.has(String(p.id)));
+      }
+      
+      setAllProducts(productsData); // Store all products
+      applyFiltersAndSort(productsData); // Apply filters
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadProducts();
+    loadActiveSales();
+    
+    // Listen for sales updates
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, [category, searchQuery]);
+
+  useEffect(() => {
+    if (category === 'sale') {
+      loadProducts();
+    }
+  }, [activeSales, category, searchQuery]);
+
+  const handleStorageChange = (event) => {
+    if (event.key === 'sales' || event.key === 'saleUpdated') {
+      loadActiveSales();
+      if (category === 'sale') {
+        loadProducts();
+      }
+    }
+  };
+
+  const loadActiveSales = () => {
+    try {
+      const sales = JSON.parse(localStorage.getItem('sales') || '[]');
+      const activeSales = sales.filter(s => s.isActive === true);
+      setActiveSales(activeSales);
+    } catch (err) {
+      console.error('Error loading sales:', err);
+      setActiveSales([]);
+    }
+  };
 
   // Apply filters and sorting whenever filters or sortBy changes
   useEffect(() => {
@@ -146,6 +193,13 @@ function Products() {
       style: 'currency',
       currency: 'VND'
     }).format(price);
+  };
+
+  const getSaleDiscount = (productId) => {
+    const sale = activeSales.find(s => 
+      s.productIds.includes(String(productId))
+    );
+    return sale ? sale.discountPercent : 0;
   };
 
   const handleAddToCart = (product, e) => {
@@ -294,13 +348,40 @@ function Products() {
               {category === 'sale' && (
                 <span className="sale-badge">SALE</span>
               )}
-              <div className="product-image">
+              <div className="product-image" style={{ position: 'relative' }}>
                 <img src={product.imageUrl} alt={product.name} />
+                {getSaleDiscount(product.id) > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    background: '#ff6b6b',
+                    color: '#fff',
+                    padding: '6px 10px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    zIndex: 10
+                  }}>
+                    -{getSaleDiscount(product.id)}%
+                  </div>
+                )}
               </div>
               <div className="product-info">
                 <span className="product-brand">{product.brand?.toUpperCase() || 'BRAND'}</span>
                 <h3 className="product-name">{product.name}</h3>
-                <p className="product-price">{formatPrice(product.price)}</p>
+                {getSaleDiscount(product.id) > 0 ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <p className="product-price" style={{ textDecoration: 'line-through', color: '#999', margin: '0', fontSize: '12px' }}>
+                      {formatPrice(product.price)}
+                    </p>
+                    <p className="product-price" style={{ color: '#ff6b6b', margin: '0' }}>
+                      {formatPrice(product.price * (1 - getSaleDiscount(product.id) / 100))}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="product-price">{formatPrice(product.price)}</p>
+                )}
                 <div className="product-meta">
                   <span className="product-size">Size: {product.size}</span>
                   <span className="product-color">{product.color}</span>

@@ -16,6 +16,8 @@ function Home() {
   const [featuredProduct, setFeaturedProduct] = useState(null);
   const [sliderIndex, setSliderIndex] = useState(0);
   const [email, setEmail] = useState('');
+  const [activeSales, setActiveSales] = useState([]);
+  const [showSaleNotification, setShowSaleNotification] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -39,6 +41,9 @@ function Home() {
         if (productsData && productsData.length > 0) {
           setFeaturedProduct(productsData[0]);
         }
+        
+        // Load sales
+        loadActiveSales();
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -48,11 +53,49 @@ function Home() {
     loadData();
   }, [selectedCategory]);
 
+  const loadActiveSales = () => {
+    try {
+      const sales = JSON.parse(localStorage.getItem('sales') || '[]');
+      const activeSales = sales.filter(s => s.isActive === true);
+      setActiveSales(activeSales);
+    } catch (err) {
+      console.error('Error loading sales:', err);
+      setActiveSales([]);
+    }
+  };
+
+  // Listen for sales updates
+  useEffect(() => {
+    const handleStorageChange = (event) => {
+      if (event.key === 'sales' || event.key === 'saleUpdated') {
+        loadActiveSales();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // Show notification when sales exist
+  useEffect(() => {
+    if (activeSales.length > 0) {
+      setShowSaleNotification(true);
+      const timer = setTimeout(() => setShowSaleNotification(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [activeSales]);
+
   const formatPrice = (price) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND'
     }).format(price);
+  };
+
+  const getSaleDiscount = (productId) => {
+    const sale = activeSales.find(s => 
+      s.productIds.includes(String(productId))
+    );
+    return sale ? sale.discountPercent : 0;
   };
 
   const handleAddFeaturedToCart = () => {
@@ -63,11 +106,7 @@ function Home() {
     }
 
     if (featuredProduct) {
-      addToCart({
-        ...featuredProduct,
-        size: featuredProduct.size,
-        color: featuredProduct.color
-      }, 1);
+      navigate(`/product/${featuredProduct.id}`);
     }
   };
 
@@ -104,6 +143,22 @@ function Home() {
 
   return (
     <div className="home-container">
+      {/* Sale Notification Banner */}
+      {showSaleNotification && activeSales.length > 0 && (
+        <div style={{
+          background: 'linear-gradient(135deg, #ff6b6b 0%, #ff5252 100%)',
+          color: '#fff',
+          padding: '15px 20px',
+          textAlign: 'center',
+          fontSize: '14px',
+          fontWeight: 'bold',
+          boxShadow: '0 2px 8px rgba(255, 107, 107, 0.3)',
+          animation: 'slideDown 0.3s ease-out'
+        }}>
+          🎉 CÓ {activeSales.length} CHƯƠNG TRÌNH SALE MỚI! Đừng bỏ lỡ cơ hội tiết kiệm! 🎉
+        </div>
+      )}
+      
       {/* Hero Section */}
       <section className="hero-section">
         <div className="hero-sidebar">
@@ -231,15 +286,42 @@ function Home() {
                   <div className="product-card">
                     <span className="product-brand">{product.brand?.toUpperCase() || 'BRAND'}</span>
                     <h3 className="product-name">{product.name}</h3>
-                    <p className="product-price">{formatPrice(product.price)}</p>
+                    {getSaleDiscount(product.id) > 0 ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <p className="product-price" style={{ textDecoration: 'line-through', color: '#999', margin: '0', fontSize: '12px' }}>
+                          {formatPrice(product.price)}
+                        </p>
+                        <p className="product-price" style={{ color: '#ff6b6b', margin: '0' }}>
+                          {formatPrice(product.price * (1 - getSaleDiscount(product.id) / 100))}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="product-price">{formatPrice(product.price)}</p>
+                    )}
                     <div className="color-options">
                       <span className="color-dot" style={{ background: '#32CD32' }}></span>
                       <span className="color-dot" style={{ background: '#FFD700' }}></span>
                       <span className="color-dot active" style={{ background: '#1E90FF' }}></span>
                       <span className="color-dot" style={{ background: '#FF69B4' }}></span>
                     </div>
-                    <div className="product-image">
+                    <div className="product-image" style={{ position: 'relative' }}>
                       <img src={product.imageUrl} alt={product.name} />
+                      {getSaleDiscount(product.id) > 0 && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '10px',
+                          right: '10px',
+                          background: '#ff6b6b',
+                          color: '#fff',
+                          padding: '6px 10px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          zIndex: 10
+                        }}>
+                          SALE {getSaleDiscount(product.id)}%
+                        </div>
+                      )}
                     </div>
                     <div className="size-options">
                       <span className="size">40</span>

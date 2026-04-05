@@ -147,6 +147,53 @@ function Checkout() {
     setPointsError('');
   };
 
+  const parseSizeInventory = (sizeString) => {
+    if (!sizeString || typeof sizeString !== 'string') return {};
+    return sizeString
+      .split(',')
+      .map(entry => entry.trim())
+      .filter(Boolean)
+      .reduce((acc, entry) => {
+        const [sizePart, qtyPart] = entry.split(':').map(part => part.trim());
+        const qty = parseInt(qtyPart, 10);
+        if (sizePart) {
+          acc[sizePart] = Number.isNaN(qty) ? 0 : qty;
+        }
+        return acc;
+      }, {});
+  };
+
+  const updateProductInventory = (cartItems) => {
+    try {
+      const inventoryData = JSON.parse(localStorage.getItem('productInventory') || '{}');
+      let hasChanges = false;
+
+      cartItems.forEach(item => {
+        const productId = item.id;
+        const selectedSize = item.size;
+        const itemInventory = item.sizeInventory || parseSizeInventory(item.sizeString || '');
+
+        if (!selectedSize || !itemInventory || typeof itemInventory[selectedSize] !== 'number') {
+          return;
+        }
+
+        const currentInventory = inventoryData[productId] || itemInventory;
+        const currentSizeQty = Number.isFinite(currentInventory[selectedSize]) ? currentInventory[selectedSize] : 0;
+        const newSizeQty = Math.max(0, currentSizeQty - item.quantity);
+        currentInventory[selectedSize] = newSizeQty;
+        inventoryData[productId] = currentInventory;
+        hasChanges = true;
+      });
+
+      if (hasChanges) {
+        localStorage.setItem('productInventory', JSON.stringify(inventoryData));
+        localStorage.setItem('lastOrderSync', Date.now().toString());
+      }
+    } catch (err) {
+      console.error('Error updating product inventory in localStorage:', err);
+    }
+  };
+
   // Calculate bulk discount for checkout
   const calculateBulkDiscountTotal = () => {
     let totalDiscount = 0;
@@ -205,10 +252,28 @@ function Checkout() {
 
   const validateStep1 = () => {
     const newErrors = {};
-    if (!formData.fullName.trim()) newErrors.fullName = 'Vui lòng nhập họ tên';
-    if (!formData.phone.trim()) newErrors.phone = 'Vui lòng nhập số điện thoại';
-    if (!formData.address.trim()) newErrors.address = 'Vui lòng nhập địa chỉ';
-    if (!formData.city.trim()) newErrors.city = 'Vui lòng nhập tỉnh/thành phố';
+    const trimmedName = formData.fullName.trim();
+    const trimmedPhone = formData.phone.trim();
+    const trimmedAddress = formData.address.trim();
+    const trimmedCity = formData.city.trim();
+
+    if (!trimmedName) newErrors.fullName = 'Vui lòng nhập họ tên';
+    if (trimmedName && trimmedName.length < 3) newErrors.fullName = 'Họ tên phải có ít nhất 3 ký tự';
+    if (trimmedName && trimmedName.length > 100) newErrors.fullName = 'Họ tên không được vượt quá 100 ký tự';
+    
+    if (!trimmedPhone) newErrors.phone = 'Vui lòng nhập số điện thoại';
+    if (trimmedPhone && !/^[0-9]{10,11}$/.test(trimmedPhone)) newErrors.phone = 'Số điện thoại phải gồm 10-11 chữ số';
+    
+    if (!trimmedAddress) newErrors.address = 'Vui lòng nhập địa chỉ';
+    if (trimmedAddress && trimmedAddress.length < 5) newErrors.address = 'Địa chỉ phải có ít nhất 5 ký tự';
+    
+    if (!trimmedCity) newErrors.city = 'Vui lòng nhập tỉnh/thành phố';
+    if (!formData.district && formData.district !== '') newErrors.district = 'Vui lòng nhập quận/huyện';
+    
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Email không hợp lệ';
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -239,6 +304,20 @@ function Checkout() {
   };
 
   const handlePlaceOrder = async () => {
+    if (isProcessing) return;
+    
+    if (!validateStep1()) {
+      alert('Vui lòng điền đầy đủ và chính xác thông tin giao hàng');
+      setStep(1);
+      return;
+    }
+    
+    if (!validateStep2()) {
+      alert('Vui lòng điền đầy đủ và chính xác thông tin thanh toán');
+      setStep(2);
+      return;
+    }
+
     setIsProcessing(true);
     logger.info('Starting order placement', { paymentMethod, totalAmount });
     
@@ -261,6 +340,7 @@ function Checkout() {
       
       // Format data for API (CreateOrderDto)
       const apiOrderData = {
+        userId: user?.id,
         fullName: formData.fullName,
         email: formData.email,
         phone: formData.phone,
@@ -315,6 +395,7 @@ function Checkout() {
         orderId: confirmedOrderId,
         id: createdOrder?.id || orderId,
         orderCode: confirmedOrderId,
+        userId: user?.id || null,
         orderDate: new Date().toISOString(),
         shippingInfo: formData,
         items: cart.map(item => ({
@@ -343,7 +424,18 @@ function Checkout() {
       const allOrders = JSON.parse(localStorage.getItem('orders') || '[]');
       allOrders.unshift(localOrderData);
       localStorage.setItem('orders', JSON.stringify(allOrders));
+      localStorage.setItem('lastOrderSync', Date.now().toString());
+
+      const adminNotifications = JSON.parse(localStorage.getItem('notifications_admin') || '[]');
+      adminNotifications.unshift({
+        id: `admin_${Date.now()}`,
+        message: `Đơn hàng mới ${confirmedOrderId} vừa được đặt bởi ${formData.fullName}`,
+        timestamp: new Date().toISOString(),
+        orderId: confirmedOrderId
+      });
+      localStorage.setItem('notifications_admin', JSON.stringify(adminNotifications));
       
+      updateProductInventory(cart);
       logger.info('Order created successfully', { orderId: confirmedOrderId });
 
       // Apply coupon usage if coupon was used
@@ -695,8 +787,8 @@ function Checkout() {
               )}
 
               <div className="step-buttons">
-                <button className="btn-back" onClick={() => setStep(1)}>← Quay lại</button>
-                <button className="btn-next" onClick={handleNextStep}>Xác nhận đơn hàng →</button>
+                <button type="button" className="btn-back" onClick={() => setStep(1)}>← Quay lại</button>
+                <button type="button" className="btn-next" onClick={handleNextStep}>Xác nhận đơn hàng →</button>
               </div>
             </div>
           )}
@@ -749,11 +841,12 @@ function Checkout() {
               </div>
 
               <div className="step-buttons">
-                <button className="btn-back" onClick={() => setStep(2)}>← Quay lại</button>
+                <button type="button" className="btn-back" onClick={() => setStep(2)}>← Quay lại</button>
                 <button 
+                  type="button"
                   className="btn-place-order" 
                   onClick={handlePlaceOrder}
-                  disabled={isProcessing}
+                  disabled={isProcessing || cart.length === 0}
                 >
                   {isProcessing ? 'Đang xử lý...' : `Đặt hàng - ${formatPrice(totalAmount)}`}
                 </button>

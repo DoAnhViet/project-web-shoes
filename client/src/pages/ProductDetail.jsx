@@ -20,6 +20,72 @@ function ProductDetail() {
     const [error, setError] = useState(null);
     const [addedToCart, setAddedToCart] = useState(false);
     const [validationError, setValidationError] = useState('');
+    const [productSizeInventory, setProductSizeInventory] = useState({});
+    const [saleDiscount, setSaleDiscount] = useState(0);
+    
+    const parseSizeInventory = (sizeString) => {
+        if (!sizeString || typeof sizeString !== 'string') {
+            console.warn('[parseSizeInventory] Empty or invalid sizeString:', sizeString);
+            return {};
+        }
+        
+        console.log('[parseSizeInventory] Input:', sizeString);
+        
+        // Try new format first (38:10, 39:8, 40:5)
+        const entries = sizeString.split(',').map(entry => entry.trim()).filter(Boolean);
+        let result = {};
+        let hasValidNewFormat = false;
+        
+        for (let entry of entries) {
+            if (entry.includes(':')) {
+                const [sizePart, qtyPart] = entry.split(':').map(part => part.trim());
+                const qty = parseInt(qtyPart, 10);
+                if (sizePart && !Number.isNaN(qty)) {
+                    result[sizePart] = qty;
+                    hasValidNewFormat = true;
+                }
+            }
+        }
+        
+        // If new format found, return it
+        if (hasValidNewFormat && Object.keys(result).length > 0) {
+            console.log('[parseSizeInventory] Parsed new format:', result);
+            return result;
+        }
+        
+        // Fall back to old format parsing (e.g., "50 lượng" -> distribute equally)
+        // If string doesn't contain ':', assume it's old format and distribute stock equally
+        result = {};
+        for (let entry of entries) {
+            if (!entry.includes(':')) {
+                // Old format like "50 lượng" or "50"
+                const match = entry.match(/^(\d+)/);
+                if (match) {
+                    const totalQty = parseInt(match[1], 10);
+                    // Distribute to common shoe sizes
+                    const commonSizes = [36, 37, 38, 39, 40, 41, 42, 43];
+                    const qtyPerSize = Math.floor(totalQty / commonSizes.length);
+                    const remainder = totalQty % commonSizes.length;
+                    
+                    commonSizes.forEach((size, idx) => {
+                        result[size.toString()] = qtyPerSize + (idx < remainder ? 1 : 0);
+                    });
+                    hasValidNewFormat = true;
+                    console.log('[parseSizeInventory] Parsed old format, distributed:', result);
+                    break;
+                }
+            }
+        }
+        
+        console.log('[parseSizeInventory] Final result:', result);
+        return result;
+    };
+
+    const formatSizeInventory = (inventory) => {
+        return Object.entries(inventory)
+            .map(([size, qty]) => `${size}:${qty}`)
+            .join(', ');
+    };
     
     // Reviews state
     const [reviews, setReviews] = useState([]);
@@ -28,22 +94,155 @@ function ProductDetail() {
     const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
     const [submittingReview, setSubmittingReview] = useState(false);
 
+    const getCachedProductInventory = () => {
+        try {
+            const allInventory = JSON.parse(localStorage.getItem('productInventory') || '{}');
+            return allInventory[id] || null;
+        } catch {
+            return null;
+        }
+    };
+
+    const loadProductInventory = () => {
+        console.log('[loadProductInventory] Called');
+        const cached = getCachedProductInventory();
+        console.log('[loadProductInventory] Cached inventory:', cached);
+        if (cached && Object.keys(cached).length > 0) {
+            console.log('[loadProductInventory] Using cached inventory');
+            setProductSizeInventory(cached);
+            return;
+        }
+
+        // Only parse if product exists
+        if (!product) {
+            console.log('[loadProductInventory] Product not loaded yet');
+            return;
+        }
+
+        console.log('[loadProductInventory] Parsing product size:', product?.size);
+        const parsed = parseSizeInventory(product?.size || '');
+        console.log('[loadProductInventory] Parsed inventory:', parsed);
+        setProductSizeInventory(parsed);
+    };
+
     useEffect(() => {
-        const loadProduct = async () => {
-            try {
-                setLoading(true);
-                const response = await productsApi.getById(id);
-                setProduct(response.data);
-                setSelectedColor(response.data.color);
-                setError(null);
-            } catch (err) {
-                console.error('Error fetching product:', err);
-                setError('Không thể tải chi tiết sản phẩm');
-            } finally {
-                setLoading(false);
+        if (product) {
+            console.log('[useEffect] Product changed, loading inventory');
+            loadProductInventory();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [product, id]);
+
+    useEffect(() => {
+        const handleStorage = (event) => {
+            if (event.key === 'productInventory' || event.key === 'lastOrderSync') {
+                loadProductInventory();
             }
         };
-        loadProduct();
+
+        const handleFocus = () => {
+            loadProductInventory();
+        };
+
+        window.addEventListener('storage', handleStorage);
+        window.addEventListener('focus', handleFocus);
+
+        return () => {
+            window.removeEventListener('storage', handleStorage);
+            window.removeEventListener('focus', handleFocus);
+        };
+    }, []);
+
+    // Listen for product updates from admin
+    useEffect(() => {
+        const handleProductUpdate = (event) => {
+            if (event.key === 'adminProductUpdate') {
+                const updateData = JSON.parse(event.newValue || '{}');
+                // If updated product is this one, refresh
+                if (updateData.productId === parseInt(id)) {
+                    loadProductFromAPI();
+                }
+            }
+        };
+        
+        window.addEventListener('storage', handleProductUpdate);
+        return () => window.removeEventListener('storage', handleProductUpdate);
+    }, [id]);
+
+    // Fallback: if no size inventory but product has stock, create default sizes
+    let finalSizeInventory = productSizeInventory;
+    if (Object.keys(finalSizeInventory).length === 0 && product?.stock > 0) {
+        console.log('[ProductDetail] Không tìm thấy kho size, tạo size mặc định');
+        // Create default sizes with equal distribution
+        const commonSizes = [36, 37, 38, 39, 40, 41, 42, 43];
+        const qtyPerSize = Math.floor(product.stock / commonSizes.length);
+        const remainder = product.stock % commonSizes.length;
+        
+        finalSizeInventory = {};
+        commonSizes.forEach((size, idx) => {
+            finalSizeInventory[size.toString()] = qtyPerSize + (idx < remainder ? 1 : 0);
+        });
+        console.log('[ProductDetail] Kho size mặc định:', finalSizeInventory);
+    }
+    
+    const availableSizeOptions = Object.entries(finalSizeInventory).map(([size, qty]) => ({
+        size,
+        quantity: qty
+    }));
+
+    console.log('[ProductDetail] finalSizeInventory:', finalSizeInventory);
+    console.log('[ProductDetail] availableSizeOptions:', availableSizeOptions);
+    console.log('[ProductDetail] product?.size:', product?.size);
+
+    const totalSizeStock = Object.values(finalSizeInventory).reduce((sum, qty) => sum + (qty || 0), 0);
+    const selectedSizeStock = selectedSize ? (finalSizeInventory[selectedSize] ?? 0) : null;
+    const totalStock = totalSizeStock || product?.stock || 0;
+
+    const availableSizes = availableSizeOptions.map(option => option.size);
+
+    const loadProductFromAPI = async () => {
+        try {
+            setLoading(true);
+            console.log('[loadProductFromAPI] Loading product with id:', id);
+            // Add cache busting with timestamp
+            const response = await fetch(`http://localhost:5240/api/products/${id}?t=${Date.now()}`);
+            console.log('[loadProductFromAPI] API response status:', response.status);
+            if (response.ok) {
+                const data = await response.json();
+                console.log('[loadProductFromAPI] Full API response:', data);
+                console.log('[loadProductFromAPI] Product keys:', Object.keys(data));
+                
+                // Handle different response formats
+                let productData = data;
+                if (data.data) {
+                    console.log('[loadProductFromAPI] Using data.data format');
+                    productData = data.data;
+                }
+                
+                console.log('[loadProductFromAPI] Product size field:', productData.size);
+                console.log('[loadProductFromAPI] Product stock field:', productData.stock);
+                setProduct(productData);
+                setSelectedColor(productData.color);
+                // Reset size inventory to force re-parse
+                setProductSizeInventory({});
+                setError(null);
+            } else {
+                console.error('[loadProductFromAPI] API error:', response.status, response.statusText);
+                setError('Không thể tải chi tiết sản phẩm');
+            }
+        } catch (err) {
+            console.error('[loadProductFromAPI] Error:', err);
+            setError('Không thể tải chi tiết sản phẩm');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Load product data on component mount or when id changes
+    useEffect(() => {
+        if (id) {
+            loadProductFromAPI();
+        }
     }, [id]);
 
     // Load reviews
@@ -61,6 +260,14 @@ function ProductDetail() {
         };
         if (id) loadReviews();
     }, [id]);
+
+    // Set default size when product loads
+    useEffect(() => {
+        if (product && availableSizes.length > 0 && !selectedSize) {
+            const defaultSize = availableSizeOptions.find(option => option.quantity > 0)?.size || availableSizes[0];
+            setSelectedSize(defaultSize);
+        }
+    }, [product, availableSizes, selectedSize, availableSizeOptions]);
 
     const handleSubmitReview = async (e) => {
         e.preventDefault();
@@ -107,6 +314,32 @@ function ProductDetail() {
         }).format(price);
     };
 
+    const loadSaleDiscount = () => {
+        try {
+            if (!product) return;
+            const sales = JSON.parse(localStorage.getItem('sales') || '[]');
+            const activeSale = sales.find(s => 
+                s.isActive === true &&
+                s.productIds.includes(String(product.id))
+            );
+            setSaleDiscount(activeSale ? activeSale.discountPercent : 0);
+        } catch (err) {
+            console.error('Error loading sale discount:', err);
+        }
+    };
+
+    // Load sale discount when product changes or sales updated
+    useEffect(() => {
+        loadSaleDiscount();
+        const handleSalesUpdate = (event) => {
+            if (event.key === 'sales' || event.key === 'saleUpdated') {
+                loadSaleDiscount();
+            }
+        };
+        window.addEventListener('storage', handleSalesUpdate);
+        return () => window.removeEventListener('storage', handleSalesUpdate);
+    }, [product]);
+
     const handleAddToCart = () => {
         setValidationError('');
 
@@ -129,19 +362,38 @@ function ProductDetail() {
             return;
         }
 
-        if (quantity > product.stock) {
-            setValidationError(`Số lượng tối đa: ${product.stock}`);
+        const stockForSelectedSize = selectedSizeStock ?? product.stock;
+        if (quantity > stockForSelectedSize) {
+            setValidationError(`Số lượng tối đa cho size ${selectedSize}: ${stockForSelectedSize}`);
             return;
         }
 
         addToCart({
             ...product,
             size: selectedSize,
-            color: selectedColor
+            color: selectedColor,
+            selectedSizeStock: stockForSelectedSize,
+            sizeInventory: productSizeInventory,
+            sizeString: product.size,
+            saleDiscount: saleDiscount
         }, quantity);
+
+        // Update local inventory after adding to cart
+        const updatedInventory = {
+            ...productSizeInventory,
+            [selectedSize]: Math.max(0, (productSizeInventory[selectedSize] || 0) - quantity)
+        };
+        setProductSizeInventory(updatedInventory);
+
+        // Save to localStorage
+        const allInventory = JSON.parse(localStorage.getItem('productInventory') || '{}');
+        allInventory[id] = updatedInventory;
+        localStorage.setItem('productInventory', JSON.stringify(allInventory));
 
         setAddedToCart(true);
         setValidationError('');
+        setQuantity(1);
+        setSelectedSize('');
         setTimeout(() => {
             setAddedToCart(false);
         }, 3000);
@@ -149,7 +401,8 @@ function ProductDetail() {
 
     const handleQuantityChange = (value) => {
         const num = parseInt(value) || 1;
-        setQuantity(Math.max(1, Math.min(num, product.stock)));
+        const maxQty = selectedSizeStock ?? product.stock;
+        setQuantity(Math.max(1, Math.min(num, Math.max(0, maxQty))));
     };
 
     if (loading) {
@@ -192,7 +445,13 @@ function ProductDetail() {
             <div className="product-detail-wrapper">
                 <div className="product-image-gallery">
                     <div className="main-image-container">
-                        <img src={product.imageUrl} alt={product.name} className="product-image-main" />
+                        {product.imageUrl ? (
+                            <img src={product.imageUrl} alt={product.name} className="product-image-main" />
+                        ) : (
+                            <div className="product-image-main" style={{ backgroundColor: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+                                Không có ảnh
+                            </div>
+                        )}
                         {product.stock === 0 && <div className="out-of-stock-overlay">Hết hàng</div>}
                     </div>
                 </div>
@@ -208,9 +467,23 @@ function ProductDetail() {
                     </div>
 
                     <div className="product-price-info">
-                        <div className="price-display">{formatPrice(product.price)}</div>
-                        <div className={`stock-status ${product.stock > 0 ? 'in-stock' : 'out-of-stock'}`}>
-                            {product.stock > 0 ? `✓ Còn ${product.stock} sản phẩm` : '✕ Hết hàng'}
+                        {saleDiscount > 0 ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div className="price-display" style={{ textDecoration: 'line-through', color: '#999', fontSize: '14px' }}>
+                                    {formatPrice(product.price)}
+                                </div>
+                                <div className="price-display" style={{ color: '#ff6b6b', fontSize: '24px', fontWeight: 'bold' }}>
+                                    {formatPrice(product.price * (1 - saleDiscount / 100))}
+                                </div>
+                                <span style={{ background: '#ff6b6b', color: '#fff', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>
+                                    -{saleDiscount}%
+                                </span>
+                            </div>
+                        ) : (
+                            <div className="price-display">{formatPrice(product.price)}</div>
+                        )}
+                        <div className={`stock-status ${totalStock > 0 ? 'in-stock' : 'out-of-stock'}`}>
+                            {totalStock > 0 ? `✓ Còn ${totalStock} sản phẩm` : '✕ Hết hàng'}
                         </div>
                     </div>
 
@@ -251,7 +524,11 @@ function ProductDetail() {
                                 className={`size-select ${selectedSize ? 'selected' : ''}`}
                             >
                                 <option value="">Chọn kích cỡ</option>
-                                <option value={product.size}>{product.size}</option>
+                                {availableSizeOptions.map(option => (
+                                    <option key={option.size} value={option.size} disabled={option.quantity === 0}>
+                                        {option.size}{option.quantity != null ? ` (${option.quantity})` : ''}
+                                    </option>
+                                ))}
                             </select>
                             {!selectedSize && <span className="required-notice">*Bắt buộc</span>}
                         </div>
@@ -262,7 +539,7 @@ function ProductDetail() {
                                 <button
                                     className="qty-btn"
                                     onClick={() => handleQuantityChange(quantity - 1)}
-                                    disabled={product.stock === 0}
+                                    disabled={totalStock === 0}
                                 >
                                     −
                                 </button>
@@ -270,20 +547,25 @@ function ProductDetail() {
                                     id="quantity"
                                     type="number"
                                     min="1"
-                                    max={product.stock}
+                                    max={selectedSizeStock ?? totalStock}
                                     value={quantity}
                                     onChange={(e) => handleQuantityChange(e.target.value)}
-                                    disabled={product.stock === 0}
+                                    disabled={totalStock === 0}
                                     className="quantity-input"
                                 />
                                 <button
                                     className="qty-btn"
                                     onClick={() => handleQuantityChange(quantity + 1)}
-                                    disabled={product.stock === 0}
+                                    disabled={totalStock === 0}
                                 >
                                     +
                                 </button>
                             </div>
+                            {selectedSize && (
+                                <div className="size-stock-info">
+                                    Số lượng còn size {selectedSize}: {selectedSizeStock ?? 0}
+                                </div>
+                            )}
                         </div>
                     </div>
 

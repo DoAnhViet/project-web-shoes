@@ -39,6 +39,24 @@ export function NotificationProvider({ children }) {
     }
   }, [notificationHistory, currentUserId]);
 
+  useEffect(() => {
+    const handleStorage = (event) => {
+      if (!event.key) return;
+      const currentKey = getNotificationKey(currentUserId);
+      if (event.key === currentKey || (currentUserId === null && event.key === 'notifications_guest')) {
+        try {
+          const newHistory = event.newValue ? JSON.parse(event.newValue) : [];
+          setNotificationHistory(newHistory);
+        } catch (err) {
+          console.error('Error syncing notifications from storage event:', err);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [currentUserId]);
+
   const addNotification = useCallback((message, duration = 3000) => {
     const id = Date.now() + Math.random();
     const notification = { id, message, timestamp: new Date().toISOString() };

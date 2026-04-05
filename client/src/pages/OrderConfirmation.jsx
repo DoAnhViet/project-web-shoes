@@ -7,7 +7,7 @@ function OrderConfirmation() {
   
   const order = useMemo(() => {
     const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-    return orders.find(o => o.id === orderId);
+    return orders.find(o => String(o.id) === String(orderId) || String(o.orderCode) === String(orderId) || String(o.orderId) === String(orderId));
   }, [orderId]);
 
   const formatPrice = (price) => {

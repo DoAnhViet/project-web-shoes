@@ -185,7 +185,7 @@ namespace WebBanGiay.API.Migrations
                         {
                             Id = 1,
                             Code = "WELCOME10",
-                            CreatedAt = new DateTime(2026, 3, 30, 21, 5, 37, 524, DateTimeKind.Local).AddTicks(1110),
+                            CreatedAt = new DateTime(2026, 4, 6, 13, 59, 50, 580, DateTimeKind.Local).AddTicks(9493),
                             Description = "Giảm 10% cho đơn hàng đầu tiên",
                             DiscountType = "percent",
                             DiscountValue = 10m,
@@ -198,7 +198,7 @@ namespace WebBanGiay.API.Migrations
                         {
                             Id = 2,
                             Code = "SAVE50K",
-                            CreatedAt = new DateTime(2026, 3, 30, 21, 5, 37, 524, DateTimeKind.Local).AddTicks(2230),
+                            CreatedAt = new DateTime(2026, 4, 6, 13, 59, 50, 581, DateTimeKind.Local).AddTicks(487),
                             Description = "Giảm 50.000đ cho đơn từ 500.000đ",
                             DiscountType = "fixed",
                             DiscountValue = 50000m,
@@ -211,7 +211,7 @@ namespace WebBanGiay.API.Migrations
                         {
                             Id = 3,
                             Code = "FREESHIP",
-                            CreatedAt = new DateTime(2026, 3, 30, 21, 5, 37, 524, DateTimeKind.Local).AddTicks(2240),
+                            CreatedAt = new DateTime(2026, 4, 6, 13, 59, 50, 581, DateTimeKind.Local).AddTicks(491),
                             Description = "Miễn phí ship cho đơn từ 300.000đ",
                             DiscountType = "fixed",
                             DiscountValue = 30000m,
@@ -220,6 +220,41 @@ namespace WebBanGiay.API.Migrations
                             UsageLimit = 0,
                             UsedCount = 0
                         });
+                });
+
+            modelBuilder.Entity("WebBanGiay.API.Models.Message", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("IsFromUser")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Messages");
                 });
 
             modelBuilder.Entity("WebBanGiay.API.Models.Order", b =>
@@ -474,7 +509,7 @@ namespace WebBanGiay.API.Migrations
                             BulkDiscountRules = "[{\"minQty\":2,\"discount\":5},{\"minQty\":5,\"discount\":10}]",
                             CategoryId = 1,
                             Color = "Đen",
-                            CreatedAt = new DateTime(2026, 3, 30, 14, 5, 37, 524, DateTimeKind.Utc).AddTicks(2750),
+                            CreatedAt = new DateTime(2026, 4, 6, 6, 59, 50, 581, DateTimeKind.Utc).AddTicks(1122),
                             Description = "Giày thể thao cao cấp Nike Air Max 270",
                             ImageUrl = "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500",
                             Name = "Nike Air Max 270",
@@ -491,7 +526,7 @@ namespace WebBanGiay.API.Migrations
                             BulkDiscountRules = "[{\"minQty\":3,\"discount\":8},{\"minQty\":6,\"discount\":15}]",
                             CategoryId = 1,
                             Color = "Trắng",
-                            CreatedAt = new DateTime(2026, 3, 30, 14, 5, 37, 524, DateTimeKind.Utc).AddTicks(4100),
+                            CreatedAt = new DateTime(2026, 4, 6, 6, 59, 50, 581, DateTimeKind.Utc).AddTicks(2125),
                             Description = "Giày chạy bộ Adidas Ultraboost",
                             ImageUrl = "https://images.unsplash.com/photo-1608231387042-66d1773070a5?w=500",
                             Name = "Adidas Ultraboost",
@@ -507,7 +542,7 @@ namespace WebBanGiay.API.Migrations
                             Brand = "Clarks",
                             CategoryId = 2,
                             Color = "Nâu",
-                            CreatedAt = new DateTime(2026, 3, 30, 14, 5, 37, 524, DateTimeKind.Utc).AddTicks(4110),
+                            CreatedAt = new DateTime(2026, 4, 6, 6, 59, 50, 581, DateTimeKind.Utc).AddTicks(2128),
                             Description = "Giày da Oxford cao cấp cho doanh nhân",
                             ImageUrl = "https://images.unsplash.com/photo-1614252369475-531eba835eb1?w=500",
                             Name = "Giày da Oxford",
@@ -656,6 +691,17 @@ namespace WebBanGiay.API.Migrations
                     b.Navigation("Cart");
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("WebBanGiay.API.Models.Message", b =>
+                {
+                    b.HasOne("WebBanGiay.API.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("WebBanGiay.API.Models.Order", b =>

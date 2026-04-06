@@ -21,6 +21,7 @@ namespace WebBanGiay.API.Data
         public DbSet<Coupon> Coupons { get; set; }
         public DbSet<UserPoints> UserPoints { get; set; }
         public DbSet<PointsTransaction> PointsTransactions { get; set; }
+        public DbSet<Message> Messages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

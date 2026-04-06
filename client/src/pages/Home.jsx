@@ -19,25 +19,72 @@ function Home() {
   const [activeSales, setActiveSales] = useState([]);
   const [showSaleNotification, setShowSaleNotification] = useState(false);
 
+  // Category name mapping for consistent filtering
+  const categoryNameMap = {
+    'giày thể thao': 'sports',
+    'giày công sở': 'office', 
+    'giày sneaker': 'sneaker',
+    'men': 'men',
+    'women': 'women',
+    'kids': 'kids',
+    'sale': 'sale',
+    'giày nam': 'men',
+    'giày nữ': 'women',
+    'giày trẻ em': 'kids',
+    'khuyến mãi': 'sale'
+  };
+
+  // Category ID mapping (same as Products.jsx)
+  const catMap = {
+    'men': 4,
+    'women': 5,
+    'kids': 6,
+    'sale': 7,
+    'sports': 1,
+    'office': 2,
+    'sneaker': 3
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
-        const params = {};
-        if (selectedCategory) params.categoryId = selectedCategory;
-
-        const [productsRes, categoriesRes] = await Promise.all([
-          productsApi.getAll(params),
-          categoriesApi.getAll()
-        ]);
-
-        // Normalize products response (supports paged result { items, ... } or direct array)
-        const productsData = productsRes.data?.items ?? productsRes.data?.value ?? productsRes.data ?? [];
-        // Normalize categories response (supports { value: [...] } or direct array)
+        
+        // First load categories to get the mapping
+        const categoriesRes = await categoriesApi.getAll();
         const categoriesData = categoriesRes.data?.value ?? categoriesRes.data ?? [];
+        setCategories(categoriesData);
+        
+        // Now load products with proper category filtering
+        const params = {};
+        if (selectedCategory) {
+          // Try to find the category by name first
+          const foundCategory = categoriesData.find(cat => 
+            cat.name.toLowerCase() === selectedCategory.toLowerCase() ||
+            categoryNameMap[cat.name.toLowerCase()] === selectedCategory
+          );
+          
+          if (foundCategory) {
+            params.categoryId = foundCategory.id;
+          } else {
+            // Fallback to name mapping
+            const categoryKey = categoryNameMap[selectedCategory.toLowerCase()] || selectedCategory.toLowerCase();
+            if (catMap[categoryKey]) {
+              params.categoryId = catMap[categoryKey];
+            } else {
+              // If it's already a number (ID), use it directly
+              const categoryId = parseInt(selectedCategory);
+              if (!isNaN(categoryId)) {
+                params.categoryId = categoryId;
+              }
+            }
+          }
+        }
+
+        const productsRes = await productsApi.getAll(params);
+        const productsData = productsRes.data?.items ?? productsRes.data?.value ?? productsRes.data ?? [];
 
         setProducts(productsData);
-        setCategories(categoriesData);
         if (productsData && productsData.length > 0) {
           setFeaturedProduct(productsData[0]);
         }
@@ -169,15 +216,19 @@ function Home() {
             >
               ALL SHOES
             </button>
-            {categories.map(cat => (
-              <button
-                key={cat.id}
-                className={`category-item ${selectedCategory === cat.id.toString() ? 'active' : ''}`}
-                onClick={() => setSelectedCategory(cat.id.toString())}
-              >
-                {cat.name.toUpperCase()}
-              </button>
-            ))}
+            {categories.map(cat => {
+              // Map category name to key for consistent filtering
+              const categoryKey = categoryNameMap[cat.name.toLowerCase()] || cat.name.toLowerCase();
+              return (
+                <button
+                  key={cat.id}
+                  className={`category-item ${selectedCategory === categoryKey ? 'active' : ''}`}
+                  onClick={() => setSelectedCategory(categoryKey)}
+                >
+                  {cat.name.toUpperCase()}
+                </button>
+              );
+            })}
           </div>
           <div className="hero-text-block">
             <h3>UNBEATABLE PERFORMANCE</h3>
@@ -282,12 +333,31 @@ function Home() {
           ) : (
             <div className="products-grid">
               {currentProducts.map(product => (
-                <Link key={product.id} to={`/product/${product.id}`} style={{ textDecoration: 'none', color: 'inherit' }} className="product-link">
-                  <div className="product-card">
+                <Link key={product.id} to={`/product/${product.id}`} className="product-card">
+                  <div className="product-image" style={{ position: 'relative' }}>
+                    <img src={product.imageUrl} alt={product.name} />
+                    {getSaleDiscount(product.id) > 0 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '10px',
+                        right: '10px',
+                        background: '#ff6b6b',
+                        color: '#fff',
+                        padding: '6px 10px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        zIndex: 10
+                      }}>
+                        -{getSaleDiscount(product.id)}%
+                      </div>
+                    )}
+                  </div>
+                  <div className="product-info">
                     <span className="product-brand">{product.brand?.toUpperCase() || 'BRAND'}</span>
                     <h3 className="product-name">{product.name}</h3>
                     {getSaleDiscount(product.id) > 0 ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <p className="product-price" style={{ textDecoration: 'line-through', color: '#999', margin: '0', fontSize: '12px' }}>
                           {formatPrice(product.price)}
                         </p>
@@ -298,41 +368,30 @@ function Home() {
                     ) : (
                       <p className="product-price">{formatPrice(product.price)}</p>
                     )}
-                    <div className="color-options">
-                      <span className="color-dot" style={{ background: '#32CD32' }}></span>
-                      <span className="color-dot" style={{ background: '#FFD700' }}></span>
-                      <span className="color-dot active" style={{ background: '#1E90FF' }}></span>
-                      <span className="color-dot" style={{ background: '#FF69B4' }}></span>
-                    </div>
-                    <div className="product-image" style={{ position: 'relative' }}>
-                      <img src={product.imageUrl} alt={product.name} />
-                      {getSaleDiscount(product.id) > 0 && (
-                        <div style={{
-                          position: 'absolute',
-                          top: '10px',
-                          right: '10px',
-                          background: '#ff6b6b',
-                          color: '#fff',
-                          padding: '6px 10px',
-                          borderRadius: '4px',
-                          fontSize: '12px',
-                          fontWeight: 'bold',
-                          zIndex: 10
-                        }}>
-                          SALE {getSaleDiscount(product.id)}%
-                        </div>
-                      )}
-                    </div>
-                    <div className="size-options">
-                      <span className="size">40</span>
-                      <span className="size active">42</span>
-                      <span className="size">41</span>
-                      <span className="size">43</span>
-                    </div>
-                    <div className="add-to-bag-btn">
-                      View Details →
+                    <div className="product-meta">
+                      <span className="product-size">Size: {product.size}</span>
+                      <span className="product-color">{product.color}</span>
                     </div>
                   </div>
+                  <button 
+                    className="add-to-cart-btn"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (!isAuthenticated) {
+                        alert('Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng');
+                        navigate('/login');
+                        return;
+                      }
+                      addToCart({
+                        ...product,
+                        size: product.size,
+                        color: product.color
+                      }, 1);
+                    }}
+                  >
+                    Thêm vào giỏ
+                  </button>
                 </Link>
               ))}
             </div>

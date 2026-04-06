@@ -26,10 +26,6 @@ export default function Navigation() {
               Find a Store
             </Link>
             <span className="nav-divider">|</span>
-            <Link to="/help" className="nav-top-link">
-              Help
-            </Link>
-            <span className="nav-divider">|</span>
             {isAuthenticated ? (
               <>
                 <Link to="/profile" className="nav-top-link">

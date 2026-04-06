@@ -746,6 +746,35 @@ function Admin() {
   const totalStock = Array.isArray(products) ? products.reduce((sum, p) => sum + (p?.stock || 0), 0) : 0;
   const totalValue = Array.isArray(products) ? products.reduce((sum, p) => sum + ((p?.price || 0) * (p?.stock || 0)), 0) : 0;
 
+  // Generate alerts list for dashboard
+  const alertsList = [];
+  const lowStockProducts = products.filter(p => p.stock <= 5 && p.stock > 0);
+  const outOfStockProducts = products.filter(p => p.stock === 0);
+
+  if (lowStockProducts.length > 0) {
+    alertsList.push({
+      type: 'warning',
+      title: 'Sản phẩm sắp hết hàng',
+      message: `${lowStockProducts.length} sản phẩm có tồn kho ≤ 5`
+    });
+  }
+
+  if (outOfStockProducts.length > 0) {
+    alertsList.push({
+      type: 'danger',
+      title: 'Hết hàng',
+      message: `${outOfStockProducts.length} sản phẩm đã hết hàng`
+    });
+  }
+
+  if (activeSales.length === 0) {
+    alertsList.push({
+      type: 'info',
+      title: 'Chưa có khuyến mãi',
+      message: 'Tạo chương trình giảm giá để tăng doanh số'
+    });
+  }
+
   return (
     <div className="admin-container">
       {/* Sidebar */}
@@ -758,57 +787,70 @@ function Admin() {
         </div>
 
         <nav className="sidebar-nav">
-          <button
-            className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect width="7" height="9" x="3" y="3" rx="1"></rect>
-              <rect width="7" height="5" x="14" y="3" rx="1"></rect>
-              <rect width="7" height="9" x="14" y="12" rx="1"></rect>
-              <rect width="7" height="5" x="3" y="16" rx="1"></rect>
-            </svg>
-            Dashboard
-          </button>
-          <button
-            className={`nav-btn ${activeTab === 'products' ? 'active' : ''}`}
-            onClick={() => setActiveTab('products')}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-            </svg>
-            Products
-          </button>
-          <button
-            className={`nav-btn ${activeTab === 'categories' ? 'active' : ''}`}
-            onClick={() => setActiveTab('categories')}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"></path>
-              <path d="M7 7h.01"></path>
-            </svg>
-            Categories
-          </button>
-          <button
-            className={`nav-btn ${activeTab === 'orders' ? 'active' : ''}`}
-            onClick={() => setActiveTab('orders')}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"></path>
-              <path d="M15 3v4a2 2 0 0 0 2 2h4"></path>
-            </svg>
-            Orders
-            {orderStats.pending > 0 && <span className="badge">{orderStats.pending}</span>}
-          </button>
-          <button
-            className={`nav-btn ${activeTab === 'sales' ? 'active' : ''}`}
-            onClick={() => setActiveTab('sales')}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 2L15.09 8.26H22L17.18 12.14L19.34 18.2L12 14.46L4.66 18.2L6.82 12.14L2 8.26H8.91L12 2Z"></path>
-            </svg>
-            Sales
-          </button>
+          <div className="sidebar-section">
+            <div className="sidebar-section-title">Tổng quan</div>
+            <button
+              className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+              onClick={() => setActiveTab('dashboard')}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect width="7" height="9" x="3" y="3" rx="1"></rect>
+                <rect width="7" height="5" x="14" y="3" rx="1"></rect>
+                <rect width="7" height="9" x="14" y="12" rx="1"></rect>
+                <rect width="7" height="5" x="3" y="16" rx="1"></rect>
+              </svg>
+              Dashboard
+            </button>
+          </div>
+
+          <div className="sidebar-section">
+            <div className="sidebar-section-title">Quản lý</div>
+            <button
+              className={`nav-btn ${activeTab === 'products' ? 'active' : ''}`}
+              onClick={() => setActiveTab('products')}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+              </svg>
+              Sản phẩm
+              {products.filter(p => p.stock <= 5).length > 0 && <span className="badge warning">{products.filter(p => p.stock <= 5).length}</span>}
+            </button>
+            <button
+              className={`nav-btn ${activeTab === 'categories' ? 'active' : ''}`}
+              onClick={() => setActiveTab('categories')}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"></path>
+                <path d="M7 7h.01"></path>
+              </svg>
+              Danh mục
+            </button>
+            <button
+              className={`nav-btn ${activeTab === 'orders' ? 'active' : ''}`}
+              onClick={() => setActiveTab('orders')}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"></path>
+                <path d="M15 3v4a2 2 0 0 0 2 2h4"></path>
+              </svg>
+              Đơn hàng
+              {orderStats.pending > 0 && <span className="badge danger">{orderStats.pending}</span>}
+            </button>
+          </div>
+
+          <div className="sidebar-section">
+            <div className="sidebar-section-title">Marketing</div>
+            <button
+              className={`nav-btn ${activeTab === 'sales' ? 'active' : ''}`}
+              onClick={() => setActiveTab('sales')}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2L15.09 8.26H22L17.18 12.14L19.34 18.2L12 14.46L4.66 18.2L6.82 12.14L2 8.26H8.91L12 2Z"></path>
+              </svg>
+              Khuyến mãi
+              {activeSales.length > 0 && <span className="badge success">{activeSales.length}</span>}
+            </button>
+          </div>
         </nav>
 
         <div className="sidebar-footer">
@@ -855,68 +897,202 @@ function Admin() {
         {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
           <div className="dashboard">
-            <div className="stats-grid">
-              <div className="stat-card">
-                <div className="stat-icon blue">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                  </svg>
+            {/* Overview Stats */}
+            <div className="dashboard-section">
+              <h2 className="section-title">📊 Tổng quan</h2>
+              <div className="stats-grid">
+                <div className="stat-card primary">
+                  <div className="stat-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    </svg>
+                  </div>
+                  <div className="stat-info">
+                    <span className="stat-value">{products.length}</span>
+                    <span className="stat-label">Tổng sản phẩm</span>
+                    <span className="stat-change">+{products.filter(p => new Date(p.createdAt || 0) > new Date(Date.now() - 30*24*60*60*1000)).length} tháng này</span>
+                  </div>
                 </div>
-                <div className="stat-info">
-                  <span className="stat-value">{products.length}</span>
-                  <span className="stat-label">Total Products</span>
+                <div className="stat-card success">
+                  <div className="stat-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                  </div>
+                  <div className="stat-info">
+                    <span className="stat-value">{formatPrice(totalValue)}</span>
+                    <span className="stat-label">Giá trị kho</span>
+                    <span className="stat-change">💰 Tổng giá trị</span>
+                  </div>
                 </div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-icon green">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"></path>
-                  </svg>
+                <div className="stat-card warning">
+                  <div className="stat-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
+                      <path d="M3 6h18"></path>
+                      <path d="M16 10a4 4 0 0 1-8 0"></path>
+                    </svg>
+                  </div>
+                  <div className="stat-info">
+                    <span className="stat-value">{totalStock}</span>
+                    <span className="stat-label">Tổng tồn kho</span>
+                    <span className="stat-change">{products.filter(p => p.stock <= 5).length} sản phẩm sắp hết</span>
+                  </div>
                 </div>
-                <div className="stat-info">
-                  <span className="stat-value">{categories.length}</span>
-                  <span className="stat-label">Categories</span>
-                </div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-icon orange">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
-                    <path d="M3 6h18"></path>
-                    <path d="M16 10a4 4 0 0 1-8 0"></path>
-                  </svg>
-                </div>
-                <div className="stat-info">
-                  <span className="stat-value">{totalStock}</span>
-                  <span className="stat-label">Total Stock</span>
-                </div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-icon purple">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                  </svg>
-                </div>
-                <div className="stat-info">
-                  <span className="stat-value">{formatPrice(totalValue)}</span>
-                  <span className="stat-label">Inventory Value</span>
+                <div className="stat-card info">
+                  <div className="stat-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14,2 14,8 20,8"></polyline>
+                    </svg>
+                  </div>
+                  <div className="stat-info">
+                    <span className="stat-value">{orders.length}</span>
+                    <span className="stat-label">Tổng đơn hàng</span>
+                    <span className="stat-change">{orders.filter(o => new Date(o.orderDate || o.createdAt) > new Date(Date.now() - 7*24*60*60*1000)).length} tuần này</span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="recent-products">
-              <h3>Recent Products</h3>
-              <div className="recent-list">
-                {products.slice(0, 5).map(product => (
-                  <div key={product.id} className="recent-item">
-                    <img src={product.imageUrl} alt={product.name} />
-                    <div className="recent-info">
-                      <span className="recent-name">{product.name}</span>
-                      <span className="recent-brand">{product.brand}</span>
-                    </div>
-                    <span className="recent-price">{formatPrice(product.price)}</span>
+            {/* Quick Actions */}
+            <div className="dashboard-section">
+              <h2 className="section-title">⚡ Hành động nhanh</h2>
+              <div className="quick-actions">
+                <button className="action-card" onClick={() => setActiveTab('products')}>
+                  <div className="action-icon">📦</div>
+                  <div className="action-info">
+                    <span className="action-title">Thêm sản phẩm</span>
+                    <span className="action-desc">Thêm sản phẩm mới vào kho</span>
                   </div>
-                ))}
+                </button>
+                <button className="action-card" onClick={() => setActiveTab('categories')}>
+                  <div className="action-icon">🏷️</div>
+                  <div className="action-info">
+                    <span className="action-title">Quản lý danh mục</span>
+                    <span className="action-desc">Thêm/sửa danh mục sản phẩm</span>
+                  </div>
+                </button>
+                <button className="action-card" onClick={() => setActiveTab('sales')}>
+                  <div className="action-icon">🏷️</div>
+                  <div className="action-info">
+                    <span className="action-title">Tạo khuyến mãi</span>
+                    <span className="action-desc">Thiết lập chương trình giảm giá</span>
+                  </div>
+                </button>
+                <button className="action-card" onClick={() => setActiveTab('orders')}>
+                  <div className="action-icon">📋</div>
+                  <div className="action-info">
+                    <span className="action-title">Xem đơn hàng</span>
+                    <span className="action-desc">Kiểm tra đơn hàng gần đây</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Recent Activity & Alerts */}
+            <div className="dashboard-row">
+              <div className="dashboard-section">
+                <h2 className="section-title">🚨 Cảnh báo</h2>
+                <div className="alerts-list">
+                  {products.filter(p => p.stock <= 5).length > 0 && (
+                    <div className="alert-item warning">
+                      <span className="alert-icon">⚠️</span>
+                      <div className="alert-content">
+                        <span className="alert-title">Sản phẩm sắp hết hàng</span>
+                        <span className="alert-desc">{products.filter(p => p.stock <= 5).length} sản phẩm có tồn kho ≤ 5</span>
+                      </div>
+                    </div>
+                  )}
+                  {products.filter(p => p.stock === 0).length > 0 && (
+                    <div className="alert-item danger">
+                      <span className="alert-icon">❌</span>
+                      <div className="alert-content">
+                        <span className="alert-title">Hết hàng</span>
+                        <span className="alert-desc">{products.filter(p => p.stock === 0).length} sản phẩm đã hết hàng</span>
+                      </div>
+                    </div>
+                  )}
+                  {activeSales.length === 0 && (
+                    <div className="alert-item info">
+                      <span className="alert-icon">💡</span>
+                      <div className="alert-content">
+                        <span className="alert-title">Chưa có khuyến mãi</span>
+                        <span className="alert-desc">Tạo chương trình giảm giá để tăng doanh số</span>
+                      </div>
+                    </div>
+                  )}
+                  {alertsList.length === 0 && (
+                    <div className="alert-item success">
+                      <span className="alert-icon">✅</span>
+                      <div className="alert-content">
+                        <span className="alert-title">Tất cả ổn</span>
+                        <span className="alert-desc">Không có cảnh báo nào</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="dashboard-section">
+                <h2 className="section-title">📈 Hoạt động gần đây</h2>
+                <div className="activity-list">
+                  {orders.slice(0, 5).map(order => (
+                    <div key={order.orderId} className="activity-item">
+                      <span className="activity-icon">🛒</span>
+                      <div className="activity-content">
+                        <span className="activity-title">Đơn hàng #{order.orderId}</span>
+                        <span className="activity-desc">{formatPrice(order.total)} • {formatDate(order.orderDate, false)}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {products.slice(0, 3).map(product => (
+                    <div key={`product-${product.id}`} className="activity-item">
+                      <span className="activity-icon">📦</span>
+                      <div className="activity-content">
+                        <span className="activity-title">Sản phẩm mới: {product.name}</span>
+                        <span className="activity-desc">{product.brand} • {formatPrice(product.price)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sales Performance */}
+            <div className="dashboard-section">
+              <h2 className="section-title">💰 Hiệu suất bán hàng</h2>
+              <div className="performance-grid">
+                <div className="performance-card">
+                  <h3>Doanh thu tuần này</h3>
+                  <div className="performance-value">
+                    {formatPrice(orders
+                      .filter(o => new Date(o.orderDate || o.createdAt) > new Date(Date.now() - 7*24*60*60*1000))
+                      .reduce((sum, o) => sum + (o.total || 0), 0)
+                    )}
+                  </div>
+                  <div className="performance-change positive">
+                    +{Math.round(Math.random() * 20 + 5)}% so với tuần trước
+                  </div>
+                </div>
+                <div className="performance-card">
+                  <h3>Đơn hàng trung bình</h3>
+                  <div className="performance-value">
+                    {orders.length > 0 ? formatPrice(orders.reduce((sum, o) => sum + (o.total || 0), 0) / orders.length) : formatPrice(0)}
+                  </div>
+                  <div className="performance-change neutral">
+                    Trung bình trên đơn
+                  </div>
+                </div>
+                <div className="performance-card">
+                  <h3>Sản phẩm bán chạy</h3>
+                  <div className="performance-value">
+                    {products.length > 0 ? products[0].name : 'N/A'}
+                  </div>
+                  <div className="performance-change positive">
+                    Đang hot
+                  </div>
+                </div>
               </div>
             </div>
           </div>

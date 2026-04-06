@@ -61,9 +61,6 @@ function Products() {
       const response = await productsApi.getAll(params);
       let productsData = response.data?.items ?? response.data?.value ?? response.data ?? [];
 
-      // Load sales first so the sale category can filter correctly
-      loadActiveSales();
-
       // Client-side search filter if API doesn't support search
       if (searchQuery && productsData.length > 0) {
         const query = searchQuery.toLowerCase();
@@ -102,12 +99,6 @@ function Products() {
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [category, searchQuery]);
-
-  useEffect(() => {
-    if (category === 'sale') {
-      loadProducts();
-    }
-  }, [activeSales, category, searchQuery]);
 
   const handleStorageChange = (event) => {
     if (event.key === 'sales' || event.key === 'saleUpdated') {

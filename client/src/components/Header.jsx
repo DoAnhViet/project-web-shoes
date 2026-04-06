@@ -12,13 +12,10 @@ export default function Header() {
   const { getTotalItems } = useCart();
   const { getWishlistCount } = useWishlist();
   const { notificationHistory } = useNotification();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Check if user is admin
-  const isAdmin = user?.role === 'Admin';
 
   const handleSearch = (e) => {
     e.preventDefault();

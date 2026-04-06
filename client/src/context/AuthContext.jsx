@@ -115,6 +115,9 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const normalizedRole = String(user?.role ?? '').toLowerCase();
+  const isAdmin = normalizedRole === 'admin' || normalizedRole === '1';
+
   const value = {
     user,
     isLoading,
@@ -124,6 +127,7 @@ export function AuthProvider({ children }) {
     logout,
     updateProfile,
     isAuthenticated: !!user,
+    isAdmin
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

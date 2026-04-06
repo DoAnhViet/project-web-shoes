@@ -2,7 +2,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function AdminRoute({ children }) {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, isAdmin } = useAuth();
 
   if (isLoading) {
     return <div style={{ padding: '20px', textAlign: 'center' }}>Đang tải...</div>;
@@ -12,9 +12,6 @@ export default function AdminRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  // Check if user has admin role (role "Admin" or role value 1)
-  const isAdmin = user?.role === 'Admin' || user?.role === 1;
-  
   if (!isAdmin) {
     return (
       <div style={{ 

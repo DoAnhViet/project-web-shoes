@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using MySqlConnector;
 using WebBanGiay.API.Data;
 using WebBanGiay.API.Repositories.Interfaces;
 using WebBanGiay.API.Repositories.Implementations;
@@ -11,14 +12,26 @@ using WebBanGiay.API.Services;
 using WebBanGiay.API.Middleware;
 using DotNetEnv;
 
-// Load .env file from parent directory
-var envPath = Path.Combine(Directory.GetCurrentDirectory(), "..", ".env");
-if (File.Exists(envPath))
-{
-    Env.Load(envPath);
-}
-
 var builder = WebApplication.CreateBuilder(args);
+
+// Load .env from the solution root (parent of API project).
+var envCandidates = new[]
+{
+    Path.Combine(builder.Environment.ContentRootPath, ".env"),
+    Path.Combine(builder.Environment.ContentRootPath, "..", ".env"),
+    Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+    Path.Combine(Directory.GetCurrentDirectory(), "..", ".env")
+};
+
+foreach (var candidate in envCandidates)
+{
+    var fullPath = Path.GetFullPath(candidate);
+    if (File.Exists(fullPath))
+    {
+        Env.Load(fullPath);
+        break;
+    }
+}
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -61,10 +74,51 @@ builder.Services.AddAuthentication(options =>
 });
 
 // Configure MySQL connection from environment variable
-var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING") 
+var rawConnectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING")
     ?? builder.Configuration.GetConnectionString("DefaultConnection");
+
+if (string.IsNullOrWhiteSpace(rawConnectionString))
+{
+    throw new InvalidOperationException("Database connection string is not configured. Set DB_CONNECTION_STRING in .env.");
+}
+
+// Normalize connection settings to reduce intermittent cloud DB timeout issues.
+var connectionBuilder = new MySqlConnectionStringBuilder(rawConnectionString)
+{
+    SslMode = MySqlSslMode.Required
+};
+
+if (connectionBuilder.ConnectionTimeout < 30)
+{
+    connectionBuilder.ConnectionTimeout = 30;
+}
+
+if (connectionBuilder.DefaultCommandTimeout < 60)
+{
+    connectionBuilder.DefaultCommandTimeout = 60;
+}
+
+var connectionString = connectionBuilder.ConnectionString;
+
+// Avoid ServerVersion.AutoDetect because it opens a DB connection and can timeout on cloud providers.
+var mysqlServerVersionValue = Environment.GetEnvironmentVariable("DB_SERVER_VERSION")
+    ?? builder.Configuration["Database:ServerVersion"]
+    ?? "8.0.36-mysql";
+
+if (!ServerVersion.TryParse(mysqlServerVersionValue, out var mysqlServerVersion))
+{
+    mysqlServerVersion = new MySqlServerVersion(new Version(8, 0, 36));
+}
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+    options.UseMySql(connectionString, mysqlServerVersion, mysqlOptions =>
+    {
+        mysqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorNumbersToAdd: null);
+        mysqlOptions.CommandTimeout(60);
+    }));
 
 // Register Repository Pattern with Dependency Injection
 builder.Services.AddScoped<IProductRepository, ProductRepository>();

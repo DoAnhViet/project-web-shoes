@@ -12,13 +12,17 @@ const api = axios.create({
 // Add JWT token to requests
 api.interceptors.request.use(
   (config) => {
+    const token = localStorage.getItem('token');
+
     // For orders, try both 'user' and 'currentUser' keys
     let user = JSON.parse(localStorage.getItem('user') || 'null');
     if (!user) {
       user = JSON.parse(localStorage.getItem('currentUser') || 'null');
     }
     
-    if (user?.token) {
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    } else if (user?.token) {
       config.headers.Authorization = `Bearer ${user.token}`;
     }
     
@@ -66,6 +70,14 @@ export const ordersApi = {
   updatePaymentStatus: (id, paymentStatus) => api.put(`/orders/${id}/payment-status`, { paymentStatus }),
   cancel: (id) => api.delete(`/orders/${id}`),
   getStats: () => api.get('/orders/stats')
+};
+
+export const usersApi = {
+  getAll: () => api.get('/users'),
+  create: (data) => api.post('/users', data),
+  updateRole: (id, role) => api.patch(`/users/${id}/role`, { role }),
+  update: (id, data) => api.put(`/users/${id}`, data),
+  delete: (id) => api.delete(`/users/${id}`)
 };
 
 // Helper to get or generate session ID for guest cart

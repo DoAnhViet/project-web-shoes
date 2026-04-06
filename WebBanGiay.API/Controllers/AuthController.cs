@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using WebBanGiay.API.DTOs;
 using WebBanGiay.API.Services;
 using WebBanGiay.API.Repositories.Interfaces;
+using WebBanGiay.API.Middleware;
 
 namespace WebBanGiay.API.Controllers;
 
@@ -238,7 +239,8 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("set-admin/{email}")]
-    [AllowAnonymous]
+    [Authorize]
+    [RequireAdmin]
     public async Task<ActionResult> SetAdmin(string email)
     {
         try

@@ -590,6 +590,19 @@
   font-size: 14px;
   transition: all 0.2s;
   font-family: inherit;
+  background: #fff;
+  color: #111;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: #666;
+  opacity: 1;
+}
+
+.form-group select option {
+  color: #111;
+  background: #fff;
 }
 
 .form-group input:focus,
@@ -772,6 +785,21 @@
   padding: 14px 12px;
   border-bottom: 1px solid #f5f5f5;
   font-size: 14px;
+  color: #111;
+}
+
+.orders-section .btn-refresh-orders {
+  padding: 10px 16px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  background: #fff;
+  color: #111;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.orders-section .btn-refresh-orders:hover {
+  background: #f5f5f5;
 }
 
 .orders-table tr:last-child td {

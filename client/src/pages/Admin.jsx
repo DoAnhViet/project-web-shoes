@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { productsApi, categoriesApi, ordersApi } from '../api/api';
+import { productsApi, categoriesApi, ordersApi, usersApi } from '../api/api';
 import { useNotification } from '../context/NotificationContext';
 import './Admin.css';
+
+const PASSWORD_UNCHANGED_MASK = '********';
 
 function Admin() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [users, setUsers] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -20,7 +23,15 @@ function Admin() {
   const [adminNotifications, setAdminNotifications] = useState([]);
   const [showAdminNotifications, setShowAdminNotifications] = useState(false);
   const [ordersLoadError, setOrdersLoadError] = useState('');
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [isUpdatingUser, setIsUpdatingUser] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState(null);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState(new Set());
+  const [userSearchText, setUserSearchText] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [userStatusFilter, setUserStatusFilter] = useState('all');
   const [saleData, setSaleData] = useState({ discountPercent: '', saleName: '' });
   const [activeSales, setActiveSales] = useState([]);
   const { addNotification } = useNotification();
@@ -38,6 +49,25 @@ function Admin() {
   const [categoryFormData, setCategoryFormData] = useState({
     name: '',
     description: ''
+  });
+  const [newUserForm, setNewUserForm] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    phone: '',
+    address: '',
+    role: 'Customer',
+    isActive: true
+  });
+  const [editUserForm, setEditUserForm] = useState({
+    id: null,
+    fullName: '',
+    email: '',
+    phone: '',
+    address: '',
+    password: '',
+    role: 'Customer',
+    isActive: true
   });
   const [errors, setErrors] = useState({});
 
@@ -127,6 +157,17 @@ function Admin() {
     }
   };
 
+  const loadUsers = async () => {
+    try {
+      const usersRes = await usersApi.getAll();
+      const usersData = usersRes.data ?? [];
+      setUsers(Array.isArray(usersData) ? usersData : []);
+    } catch (error) {
+      console.error('[Admin] Error fetching users:', error);
+      addNotification('❌ Không thể tải danh sách người dùng', 4000);
+    }
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -139,6 +180,7 @@ function Admin() {
         
         setProducts(productsData);
         setCategories(categoriesData);
+        await loadUsers();
         loadActiveSales();
         await loadOrders();
       } catch (error) {
@@ -173,6 +215,141 @@ function Admin() {
       window.removeEventListener('focus', handleFocus);
     };
   }, []);
+
+  const handleNewUserChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setNewUserForm(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const resetNewUserForm = () => {
+    setNewUserForm({
+      fullName: '',
+      email: '',
+      password: '',
+      phone: '',
+      address: '',
+      role: 'Customer',
+      isActive: true
+    });
+  };
+
+  const handleEditUserChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setEditUserForm(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const openEditUserModal = (user) => {
+    setEditUserForm({
+      id: user.id,
+      fullName: user.fullName || '',
+      email: user.email || '',
+      phone: user.phone || '',
+      address: user.address || '',
+      password: PASSWORD_UNCHANGED_MASK,
+      role: user.role || 'Customer',
+      isActive: !!user.isActive
+    });
+    setShowEditUserModal(true);
+  };
+
+  const handleUpdateUser = async (e) => {
+    e.preventDefault();
+
+    if (!editUserForm.id) return;
+
+    if (
+      editUserForm.password &&
+      editUserForm.password !== PASSWORD_UNCHANGED_MASK &&
+      editUserForm.password.length < 6
+    ) {
+      addNotification('❌ Mật khẩu tối thiểu 6 ký tự', 4000);
+      return;
+    }
+
+    try {
+      setIsUpdatingUser(true);
+      await usersApi.update(editUserForm.id, {
+        fullName: editUserForm.fullName,
+        phone: editUserForm.phone,
+        address: editUserForm.address,
+        password: editUserForm.password && editUserForm.password !== PASSWORD_UNCHANGED_MASK
+          ? editUserForm.password
+          : null,
+        role: editUserForm.role,
+        isActive: editUserForm.isActive
+      });
+
+      addNotification('✅ Cập nhật user thành công', 3000);
+      setShowEditUserModal(false);
+      await loadUsers();
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || 'Không thể cập nhật user';
+      addNotification(`❌ ${errorMessage}`, 4000);
+    } finally {
+      setIsUpdatingUser(false);
+    }
+  };
+
+  const handleDeleteUser = async (user) => {
+    if (!window.confirm(`Xóa user ${user.email}?`)) {
+      return;
+    }
+
+    try {
+      setDeletingUserId(user.id);
+      await usersApi.delete(user.id);
+      addNotification('✅ Đã xóa user', 3000);
+      await loadUsers();
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || 'Không thể xóa user';
+      addNotification(`❌ ${errorMessage}`, 4000);
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+
+    if (!newUserForm.fullName.trim() || !newUserForm.email.trim() || !newUserForm.password.trim()) {
+      addNotification('❌ Vui lòng nhập họ tên, email và mật khẩu', 4000);
+      return;
+    }
+
+    if (newUserForm.password.length < 6) {
+      addNotification('❌ Mật khẩu tối thiểu 6 ký tự', 4000);
+      return;
+    }
+
+    try {
+      setIsCreatingUser(true);
+      await usersApi.create({
+        fullName: newUserForm.fullName,
+        email: newUserForm.email,
+        password: newUserForm.password,
+        phone: newUserForm.phone,
+        address: newUserForm.address,
+        role: newUserForm.role,
+        isActive: newUserForm.isActive
+      });
+
+      addNotification('✅ Tạo user thành công', 3000);
+      resetNewUserForm();
+      setShowUserModal(false);
+      await loadUsers();
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || 'Không thể tạo user';
+      addNotification(`❌ ${errorMessage}`, 4000);
+    } finally {
+      setIsCreatingUser(false);
+    }
+  };
 
   const parseSizeInventory = (sizeString) => {
     let totalStock = 0;
@@ -437,6 +614,11 @@ function Admin() {
     setEditingCategory(null);
     resetCategoryForm();
     setShowCategoryModal(true);
+  };
+
+  const openAddUserModal = () => {
+    resetNewUserForm();
+    setShowUserModal(true);
   };
 
   const openAddModal = () => {
@@ -775,6 +957,19 @@ function Admin() {
     });
   }
 
+  const normalizedSearchText = userSearchText.trim().toLowerCase();
+  const filteredUsers = users.filter((user) => {
+    const matchesSearch = !normalizedSearchText ||
+      (user.fullName || '').toLowerCase().includes(normalizedSearchText);
+
+    const matchesRole = userRoleFilter === 'all' || user.role === userRoleFilter;
+
+    const userStatus = user.isActive ? 'active' : 'locked';
+    const matchesStatus = userStatusFilter === 'all' || userStatus === userStatusFilter;
+
+    return matchesSearch && matchesRole && matchesStatus;
+  });
+
   return (
     <div className="admin-container">
       {/* Sidebar */}
@@ -836,6 +1031,17 @@ function Admin() {
               Đơn hàng
               {orderStats.pending > 0 && <span className="badge danger">{orderStats.pending}</span>}
             </button>
+            <button
+              className={`nav-btn ${activeTab === 'permissions' ? 'active' : ''}`}
+              onClick={() => setActiveTab('permissions')}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3z"></path>
+                <path d="M9 12l2 2 4-4"></path>
+              </svg>
+              Quản lí user
+              <span className="badge">{users.length}</span>
+            </button>
           </div>
 
           <div className="sidebar-section">
@@ -869,8 +1075,8 @@ function Admin() {
         {/* Header */}
         <header className="content-header">
           <div className="header-left">
-            <h1>{activeTab === 'dashboard' ? 'Dashboard' : activeTab === 'products' ? 'Products' : activeTab === 'categories' ? 'Categories' : activeTab === 'orders' ? 'Orders' : 'Sales Management'}</h1>
-            <p className="header-subtitle">{activeTab === 'orders' ? 'Manage customer orders' : activeTab === 'sales' ? 'Create and manage discount campaigns' : 'Manage your shoe store inventory'}</p>
+            <h1>{activeTab === 'dashboard' ? 'Dashboard' : activeTab === 'products' ? 'Products' : activeTab === 'categories' ? 'Categories' : activeTab === 'orders' ? 'Orders' : activeTab === 'permissions' ? 'Quản lí user' : 'Sales Management'}</h1>
+            <p className="header-subtitle">{activeTab === 'orders' ? 'Manage customer orders' : activeTab === 'sales' ? 'Create and manage discount campaigns' : activeTab === 'permissions' ? 'Quản lí tài khoản, quyền và trạng thái người dùng' : 'Manage your shoe store inventory'}</p>
           </div>
           <div className="header-right">
             {activeTab === 'products' && (
@@ -889,6 +1095,17 @@ function Admin() {
                   <path d="M5 12h14"></path>
                 </svg>
                 Add Category
+              </button>
+            )}
+            {activeTab === 'permissions' && (
+              <button className="add-btn" onClick={openAddUserModal}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="8.5" cy="7" r="4"></circle>
+                  <path d="M20 8v6"></path>
+                  <path d="M17 11h6"></path>
+                </svg>
+                Tạo user
               </button>
             )}
           </div>
@@ -1409,6 +1626,131 @@ function Admin() {
           </div>
         )}
 
+        {/* Permissions Tab */}
+        {activeTab === 'permissions' && (
+          <div className="orders-section">
+            <div className="order-actions-row">
+              <button
+                type="button"
+                className="btn-refresh-orders"
+                onClick={loadUsers}
+              >
+                🔄 Làm mới danh sách người dùng
+              </button>
+            </div>
+
+            <div className="order-actions-row" style={{ gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                placeholder="Tìm theo tên người dùng..."
+                value={userSearchText}
+                onChange={(e) => setUserSearchText(e.target.value)}
+                style={{
+                  minWidth: '260px',
+                  padding: '10px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  color: '#111',
+                  background: '#fff'
+                }}
+              />
+              <select
+                value={userRoleFilter}
+                onChange={(e) => setUserRoleFilter(e.target.value)}
+                style={{
+                  minWidth: '170px',
+                  padding: '10px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  color: '#111',
+                  background: '#fff'
+                }}
+              >
+                <option value="all">Tất cả role</option>
+                <option value="Admin">Admin</option>
+                <option value="Customer">Customer</option>
+              </select>
+              <select
+                value={userStatusFilter}
+                onChange={(e) => setUserStatusFilter(e.target.value)}
+                style={{
+                  minWidth: '190px',
+                  padding: '10px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  color: '#111',
+                  background: '#fff'
+                }}
+              >
+                <option value="all">Tất cả trạng thái</option>
+                <option value="active">Mở khóa tài khoản</option>
+                <option value="locked">Khóa tài khoản</option>
+              </select>
+            </div>
+
+            {filteredUsers.length === 0 ? (
+              <div className="empty-orders">
+                <p>Không có người dùng phù hợp bộ lọc</p>
+              </div>
+            ) : (
+              <div className="orders-table-wrapper">
+                <table className="orders-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Họ tên</th>
+                      <th>Email</th>
+                      <th>Điện thoại</th>
+                      <th>Trạng thái</th>
+                      <th>Vai trò</th>
+                      <th>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map(user => (
+                      <tr key={user.id}>
+                        <td>{user.id}</td>
+                        <td>{user.fullName}</td>
+                        <td>{user.email}</td>
+                        <td>{user.phone || 'N/A'}</td>
+                        <td>
+                          <span className={`status-badge ${user.isActive ? 'green' : 'red'}`}>
+                            {user.isActive ? 'Hoạt động' : 'Đã khóa'}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`status-badge ${user.role === 'Admin' ? 'blue' : 'green'}`}>
+                            {user.role}
+                          </span>
+                        </td>
+                        <td style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            type="button"
+                            className="btn-refresh-orders"
+                            onClick={() => openEditUserModal(user)}
+                            style={{ padding: '6px 10px' }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-refresh-orders"
+                            onClick={() => handleDeleteUser(user)}
+                            disabled={deletingUserId === user.id}
+                            style={{ padding: '6px 10px', background: '#dc3545', color: '#fff' }}
+                          >
+                            {deletingUserId === user.id ? 'Đang xóa...' : 'Xóa'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Sales Tab */}
         {activeTab === 'sales' && (
           <div className="sales-section">
@@ -1788,6 +2130,192 @@ function Admin() {
                 </button>
                 <button type="submit" className="submit-btn">
                   {editingCategory ? 'Update Category' : 'Add Category'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* User Modal */}
+      {showUserModal && (
+        <div className="modal-overlay" onClick={() => setShowUserModal(false)}>
+          <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Tạo user mới</h2>
+              <button className="close-btn" onClick={() => setShowUserModal(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6 6 18"></path>
+                  <path d="m6 6 12 12"></path>
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleCreateUser} className="modal-form">
+              <div className="form-group full">
+                <label>Họ tên *</label>
+                <input
+                  name="fullName"
+                  value={newUserForm.fullName}
+                  onChange={handleNewUserChange}
+                  placeholder="Nhập họ tên"
+                />
+              </div>
+              <div className="form-group full">
+                <label>Email *</label>
+                <input
+                  name="email"
+                  type="email"
+                  value={newUserForm.email}
+                  onChange={handleNewUserChange}
+                  placeholder="Nhập email"
+                />
+              </div>
+              <div className="form-group full">
+                <label>Mật khẩu *</label>
+                <input
+                  name="password"
+                  type="password"
+                  value={newUserForm.password}
+                  onChange={handleNewUserChange}
+                  placeholder="Mật khẩu tối thiểu 6 ký tự"
+                />
+              </div>
+              <div className="form-group full">
+                <label>Số điện thoại</label>
+                <input
+                  name="phone"
+                  value={newUserForm.phone}
+                  onChange={handleNewUserChange}
+                  placeholder="Nhập số điện thoại"
+                />
+              </div>
+              <div className="form-group full">
+                <label>Địa chỉ</label>
+                <input
+                  name="address"
+                  value={newUserForm.address}
+                  onChange={handleNewUserChange}
+                  placeholder="Nhập địa chỉ"
+                />
+              </div>
+              <div className="form-group full">
+                <label>Vai trò</label>
+                <select
+                  name="role"
+                  value={newUserForm.role}
+                  onChange={handleNewUserChange}
+                >
+                  <option value="Customer">Customer</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+              <div className="form-group full" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  name="isActive"
+                  type="checkbox"
+                  checked={newUserForm.isActive}
+                  onChange={handleNewUserChange}
+                  style={{ width: '16px', height: '16px' }}
+                />
+                <label style={{ margin: 0 }}>Kích hoạt tài khoản ngay</label>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="cancel-btn" onClick={() => setShowUserModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="submit-btn" disabled={isCreatingUser}>
+                  {isCreatingUser ? 'Đang tạo...' : 'Tạo User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {showEditUserModal && (
+        <div className="modal-overlay" onClick={() => setShowEditUserModal(false)}>
+          <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Chỉnh sửa user</h2>
+              <button className="close-btn" onClick={() => setShowEditUserModal(false)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6 6 18"></path>
+                  <path d="m6 6 12 12"></path>
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleUpdateUser} className="modal-form">
+              <div className="form-group full">
+                <label>Họ tên</label>
+                <input
+                  name="fullName"
+                  value={editUserForm.fullName}
+                  onChange={handleEditUserChange}
+                />
+              </div>
+              <div className="form-group full">
+                <label>Email</label>
+                <input
+                  name="email"
+                  value={editUserForm.email}
+                  disabled
+                />
+              </div>
+              <div className="form-group full">
+                <label>Mật khẩu</label>
+                <input
+                  name="password"
+                  type="password"
+                  value={editUserForm.password}
+                  onChange={handleEditUserChange}
+                  placeholder="Xóa và nhập để đổi mật khẩu"
+                />
+              </div>
+              <div className="form-group full">
+                <label>Điện thoại</label>
+                <input
+                  name="phone"
+                  value={editUserForm.phone}
+                  onChange={handleEditUserChange}
+                />
+              </div>
+              <div className="form-group full">
+                <label>Địa chỉ</label>
+                <input
+                  name="address"
+                  value={editUserForm.address}
+                  onChange={handleEditUserChange}
+                />
+              </div>
+              <div className="form-group full">
+                <label>Role</label>
+                <select
+                  name="role"
+                  value={editUserForm.role}
+                  onChange={handleEditUserChange}
+                >
+                  <option value="Customer">Customer</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+              <div className="form-group full">
+                <label>Trạng thái tài khoản</label>
+                <select
+                  name="isActive"
+                  value={editUserForm.isActive ? 'active' : 'locked'}
+                  onChange={(e) => setEditUserForm(prev => ({ ...prev, isActive: e.target.value === 'active' }))}
+                >
+                  <option value="active">Mở khóa tài khoản</option>
+                  <option value="locked">Khóa tài khoản</option>
+                </select>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="cancel-btn" onClick={() => setShowEditUserModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="submit-btn" disabled={isUpdatingUser}>
+                  {isUpdatingUser ? 'Đang lưu...' : 'Lưu thay đổi'}
                 </button>
               </div>
             </form>

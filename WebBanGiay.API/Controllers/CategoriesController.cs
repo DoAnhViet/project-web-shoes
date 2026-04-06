@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WebBanGiay.API.Data;
+using WebBanGiay.API.Middleware;
 using WebBanGiay.API.Models;
 
 namespace WebBanGiay.API.Controllers
@@ -41,6 +42,7 @@ namespace WebBanGiay.API.Controllers
 
         // POST: api/Categories
         [HttpPost]
+        [RequireAdmin]
         public async Task<ActionResult<Category>> PostCategory(Category category)
         {
             _context.Categories.Add(category);
@@ -51,6 +53,7 @@ namespace WebBanGiay.API.Controllers
 
         // PUT: api/Categories/5
         [HttpPut("{id}")]
+        [RequireAdmin]
         public async Task<IActionResult> PutCategory(int id, Category category)
         {
             if (id != category.Id)
@@ -81,6 +84,7 @@ namespace WebBanGiay.API.Controllers
 
         // DELETE: api/Categories/5
         [HttpDelete("{id}")]
+        [RequireAdmin]
         public async Task<IActionResult> DeleteCategory(int id)
         {
             var category = await _context.Categories.FindAsync(id);

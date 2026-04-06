@@ -257,7 +257,7 @@ namespace WebBanGiay.API.Controllers
 
         // PATCH: api/Products/{id}/image - Update product image (no auth required)
         [HttpPatch("{id}/image")]
-        [AllowAnonymous]
+        [RequireAdmin]
         public async Task<ActionResult> UpdateProductImage(int id, [FromBody] UpdateImageDto dto)
         {
             try

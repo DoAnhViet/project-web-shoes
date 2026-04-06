@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WebBanGiay.API.Data;
 using WebBanGiay.API.DTOs;
+using WebBanGiay.API.Middleware;
 using WebBanGiay.API.Models;
 
 namespace WebBanGiay.API.Controllers
@@ -24,6 +25,7 @@ namespace WebBanGiay.API.Controllers
         /// GET /api/orders?pageNumber=1&pageSize=10&status=pending
         /// </summary>
         [HttpGet]
+        [RequireAdmin]
         public async Task<ActionResult<PagedResult<OrderResponseDto>>> GetOrders(
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10,
@@ -213,6 +215,7 @@ namespace WebBanGiay.API.Controllers
         /// PUT /api/orders/5/status
         /// </summary>
         [HttpPut("{id}/status")]
+        [RequireAdmin]
         public async Task<ActionResult<OrderResponseDto>> UpdateOrderStatus(int id, [FromBody] UpdateOrderStatusDto dto)
         {
             try
@@ -259,6 +262,7 @@ namespace WebBanGiay.API.Controllers
         /// PUT /api/orders/5/payment-status
         /// </summary>
         [HttpPut("{id}/payment-status")]
+        [RequireAdmin]
         public async Task<ActionResult<OrderResponseDto>> UpdatePaymentStatus(int id, [FromBody] UpdatePaymentStatusDto dto)
         {
             try
@@ -336,6 +340,7 @@ namespace WebBanGiay.API.Controllers
         /// GET /api/orders/stats
         /// </summary>
         [HttpGet("stats")]
+        [RequireAdmin]
         public async Task<ActionResult> GetOrderStats()
         {
             try

@@ -1,7 +1,9 @@
+using WebBanGiay.API.Services.Notifications.ExternalProviders;
+
 namespace WebBanGiay.API.Services.Notifications
 {
     /// <summary>
-    /// Notification interface
+    /// Notification channel interface - our internal application interface
     /// </summary>
     public interface INotificationChannel
     {
@@ -9,47 +11,7 @@ namespace WebBanGiay.API.Services.Notifications
     }
 
     /// <summary>
-    /// Email notification channel
-    /// </summary>
-    public class EmailNotificationChannel : INotificationChannel
-    {
-        private readonly ILogger<EmailNotificationChannel> _logger;
-
-        public EmailNotificationChannel(ILogger<EmailNotificationChannel> logger)
-        {
-            _logger = logger;
-        }
-
-        public async Task SendAsync(string recipient, string message, string subject = "")
-        {
-            _logger.LogInformation("📧 Sending email to {Recipient} with subject '{Subject}'", recipient, subject);
-            await Task.Delay(100);
-            _logger.LogInformation("✅ Email sent successfully to {Recipient}", recipient);
-        }
-    }
-
-    /// <summary>
-    /// SMS notification channel
-    /// </summary>
-    public class SmsNotificationChannel : INotificationChannel
-    {
-        private readonly ILogger<SmsNotificationChannel> _logger;
-
-        public SmsNotificationChannel(ILogger<SmsNotificationChannel> logger)
-        {
-            _logger = logger;
-        }
-
-        public async Task SendAsync(string recipient, string message, string subject = "")
-        {
-            _logger.LogInformation("📱 Sending SMS to {Recipient}: {Message}", recipient, message);
-            await Task.Delay(50);
-            _logger.LogInformation("✅ SMS sent successfully to {Recipient}", recipient);
-        }
-    }
-
-    /// <summary>
-    /// Push notification channel
+    /// Push notification channel (internal implementation, no adapter needed)
     /// </summary>
     public class PushNotificationChannel : INotificationChannel
     {
@@ -62,14 +24,14 @@ namespace WebBanGiay.API.Services.Notifications
 
         public async Task SendAsync(string recipient, string message, string subject = "")
         {
-            _logger.LogInformation("🔔 Sending push notification to {Recipient}: {Message}", recipient, message);
+            _logger.LogInformation("Sending push notification to {Recipient}: {Message}", recipient, message);
             await Task.Delay(30);
-            _logger.LogInformation("✅ Push notification sent successfully to {Recipient}", recipient);
+            _logger.LogInformation("Push notification sent successfully to {Recipient}", recipient);
         }
     }
 
     /// <summary>
-    /// Notification service to manage multiple channels
+    /// Notification service interface
     /// </summary>
     public interface INotificationService
     {
@@ -77,19 +39,30 @@ namespace WebBanGiay.API.Services.Notifications
         Task SendMultiChannelNotificationAsync(string recipient, string message, string[] channels, string subject = "");
     }
 
+    /// <summary>
+    /// Notification service - uses Adapter Pattern for email/SMS channels
+    /// Email channel uses SmtpEmailAdapter (adapts ISmtpEmailProvider to INotificationChannel)
+    /// SMS channel uses TwilioSmsAdapter (adapts ITwilioSmsProvider to INotificationChannel)
+    /// Push channel uses PushNotificationChannel directly (no adapter needed)
+    /// </summary>
     public class NotificationService : INotificationService
     {
         private readonly Dictionary<string, INotificationChannel> _channels;
         private readonly ILogger<NotificationService> _logger;
 
-        public NotificationService(ILogger<NotificationService> logger, ILogger<EmailNotificationChannel> emailLogger, ILogger<SmsNotificationChannel> smsLogger, ILogger<PushNotificationChannel> pushLogger)
+        public NotificationService(
+            ILogger<NotificationService> logger,
+            SmtpEmailAdapter emailAdapter,
+            TwilioSmsAdapter smsAdapter,
+            PushNotificationChannel pushChannel)
         {
             _logger = logger;
+            // Adapter Pattern: email and sms channels are adapters wrapping external providers
             _channels = new Dictionary<string, INotificationChannel>
             {
-                { "email", new EmailNotificationChannel(emailLogger) },
-                { "sms", new SmsNotificationChannel(smsLogger) },
-                { "push", new PushNotificationChannel(pushLogger) }
+                { "email", emailAdapter },
+                { "sms", smsAdapter },
+                { "push", pushChannel }
             };
         }
 
@@ -97,11 +70,12 @@ namespace WebBanGiay.API.Services.Notifications
         {
             if (_channels.TryGetValue(channel.ToLower(), out var notificationChannel))
             {
+                _logger.LogInformation("Sending {Channel} notification to {Recipient}", channel, recipient);
                 await notificationChannel.SendAsync(recipient, message, subject);
             }
             else
             {
-                _logger.LogWarning("⚠️ Unknown notification channel: {Channel}", channel);
+                _logger.LogWarning("Unknown notification channel: {Channel}", channel);
             }
         }
 

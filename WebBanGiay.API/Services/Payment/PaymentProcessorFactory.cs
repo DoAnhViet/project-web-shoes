@@ -1,3 +1,5 @@
+using WebBanGiay.API.Services;
+
 namespace WebBanGiay.API.Services.Payment
 {
     /// <summary>
@@ -94,8 +96,16 @@ namespace WebBanGiay.API.Services.Payment
 
     public class PaymentProcessorFactory : IPaymentProcessorFactory
     {
+        private readonly ILoggerService _loggerService;
+
+        public PaymentProcessorFactory(ILoggerService loggerService)
+        {
+            _loggerService = loggerService;
+        }
+
         public IPaymentProcessor CreatePaymentProcessor(string paymentMethod)
         {
+            _loggerService.LogInfo($"[Factory] Creating payment processor for method: {paymentMethod}");
             return paymentMethod.ToLower() switch
             {
                 "cod" => new CodPaymentProcessor(),

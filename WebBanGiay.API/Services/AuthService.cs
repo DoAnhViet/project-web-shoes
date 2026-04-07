@@ -18,16 +18,19 @@ public class AuthService : IAuthService
     private readonly IUserRepository _userRepository;
     private readonly ITokenService _tokenService;
     private readonly ILogger<AuthService> _logger;
+    private readonly ILoggerService _loggerService;
 
     public AuthService(
         IUserRepository userRepository,
         ITokenService tokenService,
-        ILogger<AuthService> logger
+        ILogger<AuthService> logger,
+        ILoggerService loggerService
     )
     {
         _userRepository = userRepository;
         _tokenService = tokenService;
         _logger = logger;
+        _loggerService = loggerService;
     }
 
     public async Task<AuthResponseDto> RegisterAsync(RegisterRequestDto request)
@@ -90,6 +93,7 @@ public class AuthService : IAuthService
         var token = _tokenService.GenerateToken(createdUser.Id, createdUser.Email, createdUser.Role);
 
         _logger.LogInformation($"User registered: {createdUser.Email}");
+        _loggerService.LogInfo($"[Singleton] User registered: {createdUser.Email}");
 
         return new AuthResponseDto
         {
@@ -134,6 +138,7 @@ public class AuthService : IAuthService
         var token = _tokenService.GenerateToken(user.Id, user.Email, user.Role);
 
         _logger.LogInformation($"User logged in: {user.Email}");
+        _loggerService.LogInfo($"[Singleton] User logged in: {user.Email}");
 
         return new AuthResponseDto
         {
@@ -175,6 +180,7 @@ public class AuthService : IAuthService
         await _userRepository.UpdateAsync(user);
 
         _logger.LogInformation($"User profile updated: {user.Email}");
+        _loggerService.LogInfo($"[Singleton] User profile updated: {user.Email}");
 
         return MapToUserDto(user);
     }

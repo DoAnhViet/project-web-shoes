@@ -643,11 +643,11 @@ function Admin() {
 
   const toggleProductSelection = (productId) => {
     const newSelected = new Set(selectedProducts);
-    const idString = String(productId);
-    if (newSelected.has(idString)) {
-      newSelected.delete(idString);
+    const id = Number(productId);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
     } else {
-      newSelected.add(idString);
+      newSelected.add(id);
     }
     setSelectedProducts(newSelected);
   };
@@ -662,8 +662,6 @@ function Admin() {
   };
 
   const handleCreateSale = async () => {
-    console.log('[Admin] handleCreateSale called - selectedProducts:', selectedProducts.size);
-
     if (!saleData.saleName.trim()) {
       addNotification('❌ Vui lòng nhập tên chương trình sale', 3000);
       return;
@@ -679,30 +677,34 @@ function Admin() {
 
     try {
       const productCount = selectedProducts.size;
-      const productIdsArray = Array.from(selectedProducts).map(String);
       const productIdsInt = Array.from(selectedProducts).map(Number);
       const discountValue = parseInt(saleData.discountPercent);
 
       // Batch update discountPercent in database via API
-      console.log('[Admin] Updating discount in DB:', productIdsInt, discountValue);
       await productsApi.batchUpdateDiscount(productIdsInt, discountValue);
-      console.log('[Admin] DB update successful');
 
       // Update local products state
+      const selectedSet = new Set(productIdsInt);
       setProducts(prev => prev.map(p =>
-        selectedProducts.has(p.id) ? { ...p, discountPercent: discountValue } : p
+        selectedSet.has(p.id) ? { ...p, discountPercent: discountValue } : p
       ));
 
       const newSale = {
         id: `sale_${Date.now()}`,
         name: saleData.saleName,
         discountPercent: discountValue,
-        productIds: productIdsArray,
+        productIds: productIdsInt,
         isActive: true,
         createdAt: new Date().toISOString()
       };
 
+      // Read current sales, check for duplicate name, then save
       const sales = JSON.parse(localStorage.getItem('sales') || '[]');
+      const duplicate = sales.find(s => s.name === saleData.saleName && s.isActive);
+      if (duplicate) {
+        addNotification('❌ Chương trình sale với tên này đã tồn tại', 3000);
+        return;
+      }
       sales.push(newSale);
       localStorage.setItem('sales', JSON.stringify(sales));
 
@@ -710,9 +712,7 @@ function Admin() {
       setSaleData({ discountPercent: '', saleName: '' });
       setSelectedProducts(new Set());
       setShowSaleModal(false);
-      addNotification(`✅ Tạo chương trình sale "${saleData.saleName}" thành công! Áp dụng cho ${productCount} sản phẩm`, 3000);
-
-      localStorage.setItem('saleUpdated', JSON.stringify({ timestamp: Date.now() }));
+      addNotification(`✅ Tạo chương trình sale "${newSale.name}" thành công! Áp dụng cho ${productCount} sản phẩm`, 3000);
     } catch (err) {
       console.error('[Admin Sale] Error creating sale:', err);
       addNotification('❌ Không thể tạo chương trình sale: ' + (err.response?.data?.message || err.message), 5000);
@@ -750,8 +750,9 @@ function Admin() {
   };
 
   const _getProductSaleDiscount = (productId) => {
-    const activeSale = activeSales.find(sale => 
-      sale.productIds.includes(String(productId))
+    const id = Number(productId);
+    const activeSale = activeSales.find(sale =>
+      sale.productIds.map(Number).includes(id)
     );
     return activeSale ? activeSale.discountPercent : 0;
   };
@@ -1901,13 +1902,13 @@ function Admin() {
                           padding: '8px', 
                           borderBottom: '1px solid #eee',
                           cursor: 'pointer',
-                          background: selectedProducts.has(String(product.id)) ? '#f0f0f0' : 'transparent'
+                          background: selectedProducts.has(product.id) ? '#f0f0f0' : 'transparent'
                         }}
                         onClick={() => toggleProductSelection(product.id)}
                       >
                         <input
                           type="checkbox"
-                          checked={selectedProducts.has(String(product.id))}
+                          checked={selectedProducts.has(product.id)}
                           onChange={() => {}}
                           style={{ marginRight: '10px', cursor: 'pointer' }}
                         />

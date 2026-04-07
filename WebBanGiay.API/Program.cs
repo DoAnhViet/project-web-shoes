@@ -10,7 +10,14 @@ using WebBanGiay.API.Observers;
 using WebBanGiay.API.Observers.Implementations;
 using WebBanGiay.API.Services;
 using WebBanGiay.API.Services.Payment;
+using WebBanGiay.API.Services.PricingStrategies;
+using WebBanGiay.API.Services.Commands;
+using WebBanGiay.API.Services.OrderStates;
+using WebBanGiay.API.Services.Notifications;
+using WebBanGiay.API.Services.Notifications.ExternalProviders;
+using WebBanGiay.API.PriceCalculators.Services;
 using WebBanGiay.API.Middleware;
+
 using DotNetEnv;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -133,8 +140,28 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 // Register Payment Factory Pattern
 builder.Services.AddScoped<IPaymentProcessorFactory, PaymentProcessorFactory>();
 
-// Register Logger Service as Singleton
+// Register Logger Service as Singleton (Pattern 1: Singleton)
 builder.Services.AddSingleton<ILoggerService, LoggerService>();
+
+// Register Strategy Pattern - Pricing Context (Pattern 2: Strategy)
+builder.Services.AddScoped<IPricingContext, PricingContext>();
+
+// Register Decorator Pattern - Price Calculation Service (Pattern 3: Decorator)
+builder.Services.AddTransient<PriceCalculationService>();
+
+// Register Command Pattern (Pattern 4: Command)
+builder.Services.AddScoped<ICommandInvoker, CommandInvoker>();
+
+// Register State Pattern - Order Status Management (Pattern 7: State)
+builder.Services.AddSingleton<IOrderStateManager, OrderStateManager>();
+
+// Register Adapter Pattern - External Notification Providers (Pattern 6: Adapter)
+builder.Services.AddSingleton<ISmtpEmailProvider, SmtpEmailProvider>();
+builder.Services.AddSingleton<ITwilioSmsProvider, TwilioSmsProvider>();
+builder.Services.AddScoped<SmtpEmailAdapter>();
+builder.Services.AddScoped<TwilioSmsAdapter>();
+builder.Services.AddScoped<PushNotificationChannel>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // Register Observer Pattern
 // ReviewSubject is a singleton to maintain observer subscriptions across requests

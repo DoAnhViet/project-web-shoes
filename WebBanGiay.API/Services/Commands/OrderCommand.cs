@@ -1,7 +1,18 @@
+using WebBanGiay.API.Data;
+using WebBanGiay.API.Models;
+
 namespace WebBanGiay.API.Services.Commands
 {
     /// <summary>
-    /// Command pattern interface for order operations
+    /// Command Pattern - Interface for commands that return a result
+    /// </summary>
+    public interface ICommand<TResult>
+    {
+        Task<TResult> ExecuteAsync();
+    }
+
+    /// <summary>
+    /// Command Pattern - Interface for void commands
     /// </summary>
     public interface ICommand
     {
@@ -9,92 +20,108 @@ namespace WebBanGiay.API.Services.Commands
     }
 
     /// <summary>
-    /// DTO for order command
+    /// Command Pattern - Creates an order in the database
+    /// Encapsulates the order persistence logic as a command object
     /// </summary>
-    public class OrderCommandDto
+    public class CreateOrderCommand : ICommand<Order>
     {
-        public int ProductId { get; set; }
-        public int Quantity { get; set; }
-        public string PaymentMethod { get; set; } = string.Empty;
-        public string CustomerEmail { get; set; } = string.Empty;
-    }
+        private readonly ApplicationDbContext _context;
+        private readonly Order _order;
+        private readonly ILoggerService _loggerService;
 
-    /// <summary>
-    /// Command to create an order
-    /// </summary>
-    public class CreateOrderCommand : ICommand
-    {
-        private readonly OrderCommandDto _orderData;
-        private readonly ILogger<CreateOrderCommand> _logger;
-
-        public CreateOrderCommand(OrderCommandDto orderData, ILogger<CreateOrderCommand> logger)
+        public CreateOrderCommand(ApplicationDbContext context, Order order, ILoggerService loggerService)
         {
-            _orderData = orderData;
-            _logger = logger;
+            _context = context;
+            _order = order;
+            _loggerService = loggerService;
         }
 
-        public async Task ExecuteAsync()
+        public async Task<Order> ExecuteAsync()
         {
-            _logger.LogInformation("📦 Executing CreateOrderCommand for Product {ProductId}, Quantity {Quantity}",
-                _orderData.ProductId, _orderData.Quantity);
-
-            // Simulate order creation logic
-            await Task.Delay(100);
-
-            _logger.LogInformation("✅ Order created successfully for customer {CustomerEmail}",
-                _orderData.CustomerEmail);
+            _loggerService.LogInfo($"Executing CreateOrderCommand for order {_order.OrderCode}");
+            _context.Orders.Add(_order);
+            await _context.SaveChangesAsync();
+            _loggerService.LogInfo($"Order {_order.OrderCode} persisted successfully with ID {_order.Id}");
+            return _order;
         }
     }
 
     /// <summary>
-    /// Command to cancel an order
+    /// Command Pattern - Cancels an order in the database
+    /// Encapsulates the order cancellation logic as a command object
     /// </summary>
     public class CancelOrderCommand : ICommand
     {
+        private readonly ApplicationDbContext _context;
         private readonly int _orderId;
-        private readonly ILogger<CancelOrderCommand> _logger;
+        private readonly ILoggerService _loggerService;
 
-        public CancelOrderCommand(int orderId, ILogger<CancelOrderCommand> logger)
+        public CancelOrderCommand(ApplicationDbContext context, int orderId, ILoggerService loggerService)
         {
+            _context = context;
             _orderId = orderId;
-            _logger = logger;
+            _loggerService = loggerService;
         }
 
         public async Task ExecuteAsync()
         {
-            _logger.LogInformation("❌ Cancelling order {OrderId}", _orderId);
-            await Task.Delay(50);
-            _logger.LogInformation("✅ Order {OrderId} cancelled successfully", _orderId);
+            var order = await _context.Orders.FindAsync(_orderId);
+            if (order == null)
+                throw new InvalidOperationException($"Order {_orderId} not found");
+
+            order.Status = "cancelled";
+            order.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            _loggerService.LogInfo($"Order {_orderId} cancelled via CancelOrderCommand");
         }
     }
 
     /// <summary>
-    /// Command invoker to execute commands
+    /// Command Pattern - Invoker that executes command objects
+    /// Provides centralized logging and error handling for all commands
     /// </summary>
     public interface ICommandInvoker
     {
+        Task<TResult> ExecuteCommandAsync<TResult>(ICommand<TResult> command);
         Task ExecuteCommandAsync(ICommand command);
     }
 
     public class CommandInvoker : ICommandInvoker
     {
-        private readonly ILogger<CommandInvoker> _logger;
+        private readonly ILoggerService _loggerService;
 
-        public CommandInvoker(ILogger<CommandInvoker> logger)
+        public CommandInvoker(ILoggerService loggerService)
         {
-            _logger = logger;
+            _loggerService = loggerService;
+        }
+
+        public async Task<TResult> ExecuteCommandAsync<TResult>(ICommand<TResult> command)
+        {
+            _loggerService.LogInfo($"Invoking command: {command.GetType().Name}");
+            try
+            {
+                var result = await command.ExecuteAsync();
+                _loggerService.LogInfo($"Command {command.GetType().Name} completed successfully");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _loggerService.LogError($"Command {command.GetType().Name} failed: {ex.Message}", ex);
+                throw;
+            }
         }
 
         public async Task ExecuteCommandAsync(ICommand command)
         {
+            _loggerService.LogInfo($"Invoking command: {command.GetType().Name}");
             try
             {
-                _logger.LogInformation("⚙️ Invoking command: {CommandType}", command.GetType().Name);
                 await command.ExecuteAsync();
+                _loggerService.LogInfo($"Command {command.GetType().Name} completed successfully");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Command execution failed");
+                _loggerService.LogError($"Command {command.GetType().Name} failed: {ex.Message}", ex);
                 throw;
             }
         }

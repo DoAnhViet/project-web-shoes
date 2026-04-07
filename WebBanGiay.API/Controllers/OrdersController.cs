@@ -4,6 +4,13 @@ using WebBanGiay.API.Data;
 using WebBanGiay.API.DTOs;
 using WebBanGiay.API.Middleware;
 using WebBanGiay.API.Models;
+using WebBanGiay.API.Services;
+using WebBanGiay.API.Services.PricingStrategies;
+using WebBanGiay.API.Services.Commands;
+using WebBanGiay.API.Services.Notifications;
+using WebBanGiay.API.Services.OrderStates;
+using WebBanGiay.API.Services.Builders;
+using WebBanGiay.API.PriceCalculators.Services;
 
 namespace WebBanGiay.API.Controllers
 {
@@ -13,11 +20,28 @@ namespace WebBanGiay.API.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<OrdersController> _logger;
+        private readonly ILoggerService _loggerService;              // Pattern 1: Singleton
+        private readonly IPricingContext _pricingContext;              // Pattern 2: Strategy
+        private readonly ICommandInvoker _commandInvoker;             // Pattern 4: Command
+        private readonly INotificationService _notificationService;   // Pattern 6: Adapter
+        private readonly IOrderStateManager _orderStateManager;       // Pattern 7: State
 
-        public OrdersController(ApplicationDbContext context, ILogger<OrdersController> logger)
+        public OrdersController(
+            ApplicationDbContext context,
+            ILogger<OrdersController> logger,
+            ILoggerService loggerService,
+            IPricingContext pricingContext,
+            ICommandInvoker commandInvoker,
+            INotificationService notificationService,
+            IOrderStateManager orderStateManager)
         {
             _context = context;
             _logger = logger;
+            _loggerService = loggerService;
+            _pricingContext = pricingContext;
+            _commandInvoker = commandInvoker;
+            _notificationService = notificationService;
+            _orderStateManager = orderStateManager;
         }
 
         /// <summary>
@@ -38,13 +62,11 @@ namespace WebBanGiay.API.Controllers
                     .Include(o => o.OrderItems)
                     .AsQueryable();
 
-                // Filter by status
                 if (!string.IsNullOrEmpty(status))
                 {
                     query = query.Where(o => o.Status == status);
                 }
 
-                // Filter by email (for customer viewing their orders)
                 if (!string.IsNullOrEmpty(email))
                 {
                     query = query.Where(o => o.Email == email);
@@ -75,7 +97,7 @@ namespace WebBanGiay.API.Controllers
         }
 
         /// <summary>
-        /// Get orders for a specific customer by email (no admin required)
+        /// Get orders for a specific customer by email
         /// GET /api/orders/my?email=user@example.com
         /// </summary>
         [HttpGet("my")]
@@ -176,6 +198,8 @@ namespace WebBanGiay.API.Controllers
         /// <summary>
         /// Create a new order
         /// POST /api/orders
+        /// Uses: Strategy (pricing), Decorator (price calc), Builder (order construction),
+        ///       Command (persistence), Singleton (logging), Adapter (notification)
         /// </summary>
         [HttpPost]
         public async Task<ActionResult<OrderResponseDto>> CreateOrder([FromBody] CreateOrderDto dto)
@@ -193,63 +217,85 @@ namespace WebBanGiay.API.Controllers
                     return BadRequest(new { message = "Order must have at least one item" });
                 }
 
-                // Generate order code
-                var orderCode = "ORD" + DateTime.UtcNow.Ticks.ToString("X").ToUpper();
+                // ============ STRATEGY PATTERN ============
+                // Select pricing strategy based on order characteristics
+                var totalQuantity = dto.Items.Sum(i => i.Quantity);
+                var strategy = _pricingContext.ResolveStrategy(totalQuantity, isVip: false, isSeasonalSale: false);
+                _pricingContext.SetStrategy(strategy);
+                _loggerService.LogInfo($"[Strategy] Selected pricing strategy: {strategy.GetName()} for quantity {totalQuantity}");
 
-                // Calculate totals
-                var subtotal = dto.Items.Sum(i => i.Price * i.Quantity);
-                var shippingFee = subtotal >= 500000 ? 0 : 30000;
-                var discount = dto.Discount; // Use discount from frontend (bulk + coupon + points)
-                var total = subtotal + shippingFee - discount;
+                // Calculate subtotal using the selected strategy
+                var subtotal = dto.Items.Sum(i => _pricingContext.CalculatePrice(i.Price, i.Quantity));
 
-                // Create order
-                var order = new Order
+                // ============ DECORATOR PATTERN ============
+                // Build price calculation chain with decorators
+                var priceService = new PriceCalculationService();
+                var shippingFee = subtotal >= 500000 ? 0m : 30000m;
+                if (shippingFee > 0)
                 {
-                    UserId = dto.UserId,
-                    OrderCode = orderCode,
-                    FullName = dto.FullName,
-                    Email = dto.Email,
-                    Phone = dto.Phone,
-                    Address = dto.Address,
-                    City = dto.City,
-                    District = dto.District,
-                    Ward = dto.Ward,
-                    Note = dto.Note,
-                    Subtotal = subtotal,
-                    ShippingFee = shippingFee,
-                    Discount = discount,
-                    Total = total,
-                    PaymentMethod = dto.PaymentMethod,
-                    PaymentStatus = dto.PaymentMethod == "cod" ? "pending" : "completed",
-                    Status = "pending",
-                    CreatedAt = DateTime.UtcNow
-                };
+                    priceService.WithFlatShipping(shippingFee);
+                }
+                var decoratedTotal = priceService.Calculate(subtotal);
+                _loggerService.LogInfo($"[Decorator] Price calculation: base={subtotal}, decorated={decoratedTotal}, shipping={shippingFee}");
 
-                // Add order items
-                foreach (var item in dto.Items)
+                // Use frontend discount (bulk + coupon + points) for backward compatibility
+                var discount = dto.Discount;
+                var total = decoratedTotal - discount;
+
+                // ============ BUILDER PATTERN ============
+                // Construct order using fluent builder API
+                var orderItems = dto.Items.Select(i => new OrderItem
                 {
-                    order.OrderItems.Add(new OrderItem
-                    {
-                        ProductId = item.ProductId,
-                        ProductName = item.ProductName,
-                        ProductImage = item.ProductImage,
-                        Size = item.Size,
-                        Color = item.Color,
-                        Price = item.Price,
-                        Quantity = item.Quantity,
-                        LineTotal = item.Price * item.Quantity
-                    });
+                    ProductId = i.ProductId,
+                    ProductName = i.ProductName,
+                    ProductImage = i.ProductImage,
+                    Size = i.Size,
+                    Color = i.Color,
+                    Price = i.Price,
+                    Quantity = i.Quantity,
+                    LineTotal = i.Price * i.Quantity
+                }).ToList();
+
+                var order = new OrderBuilder()
+                    .SetCustomerInfo(dto.UserId, dto.FullName, dto.Email, dto.Phone)
+                    .SetShippingAddress(dto.Address, dto.City, dto.District, dto.Ward)
+                    .SetNote(dto.Note)
+                    .SetPricing(subtotal, shippingFee, discount, total)
+                    .SetPayment(dto.PaymentMethod)
+                    .AddItems(orderItems)
+                    .Build();
+
+                _loggerService.LogInfo($"[Builder] Order built: {order.OrderCode}, items={order.OrderItems.Count}");
+
+                // ============ COMMAND PATTERN ============
+                // Execute order creation through command invoker
+                var createCommand = new CreateOrderCommand(_context, order, _loggerService);
+                var createdOrder = await _commandInvoker.ExecuteCommandAsync(createCommand);
+
+                // ============ SINGLETON PATTERN ============
+                // Log business event using singleton logger service
+                _loggerService.LogInfo($"[Singleton] Order {order.OrderCode} created. Strategy: {strategy.GetName()}, Total: {total}");
+
+                // ============ ADAPTER PATTERN ============
+                // Send notification via adapted email channel
+                try
+                {
+                    await _notificationService.SendNotificationAsync(
+                        dto.Email,
+                        $"Your order {order.OrderCode} has been placed. Total: {total:N0} VND",
+                        "email",
+                        "Order Confirmation - WebBanGiay");
+                }
+                catch (Exception notifEx)
+                {
+                    _loggerService.LogWarning($"Notification failed (non-critical): {notifEx.Message}");
                 }
 
-                _context.Orders.Add(order);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("Order created: {OrderCode}", orderCode);
-
-                return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, MapToResponseDto(order));
+                return CreatedAtAction(nameof(GetOrder), new { id = createdOrder.Id }, MapToResponseDto(createdOrder));
             }
             catch (Exception ex)
             {
+                _loggerService.LogError("Error creating order", ex);
                 _logger.LogError(ex, "Error creating order");
                 return StatusCode(500, new { message = "Error creating order" });
             }
@@ -258,6 +304,7 @@ namespace WebBanGiay.API.Controllers
         /// <summary>
         /// Update order status
         /// PUT /api/orders/5/status
+        /// Uses: State (transition validation), Singleton (logging), Adapter (notification)
         /// </summary>
         [HttpPut("{id}/status")]
         [RequireAdmin]
@@ -274,22 +321,23 @@ namespace WebBanGiay.API.Controllers
                     return NotFound(new { message = "Order not found" });
                 }
 
-                var validStatuses = new[] { "pending", "confirmed", "shipping", "delivered", "cancelled" };
-                if (!validStatuses.Contains(dto.Status.ToLower()))
-                {
-                    return BadRequest(new { message = "Invalid status. Valid values: pending, confirmed, shipping, delivered, cancelled" });
-                }
-
-                // Validate status transition - prevent going backwards
                 var currentStatus = order.Status.ToLower();
                 var newStatus = dto.Status.ToLower();
-                
-                if (!IsValidStatusTransition(currentStatus, newStatus))
+
+                // ============ STATE PATTERN ============
+                // Validate status transition using State objects
+                if (!_orderStateManager.IsValidTransition(currentStatus, newStatus))
                 {
-                    return BadRequest(new { message = $"Cannot change status from '{currentStatus}' to '{newStatus}'. Invalid transition." });
+                    var allowed = _orderStateManager.GetAllowedTransitions(currentStatus);
+                    _loggerService.LogWarning($"[State] Invalid transition: {currentStatus} -> {newStatus}");
+                    return BadRequest(new
+                    {
+                        message = $"Cannot change status from '{currentStatus}' to '{newStatus}'. Invalid transition.",
+                        allowedTransitions = allowed
+                    });
                 }
 
-                order.Status = dto.Status.ToLower();
+                order.Status = newStatus;
                 order.UpdatedAt = DateTime.UtcNow;
 
                 // Auto-complete payment when delivered with COD
@@ -300,12 +348,28 @@ namespace WebBanGiay.API.Controllers
 
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Order {Id} status updated to {Status}", id, dto.Status);
+                // ============ SINGLETON PATTERN ============
+                _loggerService.LogInfo($"[State] Order {id} status: {currentStatus} -> {newStatus}");
+
+                // ============ ADAPTER PATTERN ============
+                try
+                {
+                    await _notificationService.SendNotificationAsync(
+                        order.Email,
+                        $"Your order {order.OrderCode} status has been updated to: {newStatus}",
+                        "email",
+                        "Order Status Update - WebBanGiay");
+                }
+                catch (Exception notifEx)
+                {
+                    _loggerService.LogWarning($"Notification failed (non-critical): {notifEx.Message}");
+                }
 
                 return Ok(MapToResponseDto(order));
             }
             catch (Exception ex)
             {
+                _loggerService.LogError("Error updating order status", ex);
                 _logger.LogError(ex, "Error updating order status");
                 return StatusCode(500, new { message = "Error updating order status" });
             }
@@ -341,7 +405,7 @@ namespace WebBanGiay.API.Controllers
 
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Order {Id} payment status updated to {PaymentStatus}", id, dto.PaymentStatus);
+                _loggerService.LogInfo($"Order {id} payment status updated to {dto.PaymentStatus}");
 
                 return Ok(MapToResponseDto(order));
             }
@@ -355,6 +419,7 @@ namespace WebBanGiay.API.Controllers
         /// <summary>
         /// Cancel order
         /// DELETE /api/orders/5
+        /// Uses: State (validation), Command (execution), Adapter (notification)
         /// </summary>
         [HttpDelete("{id}")]
         public async Task<ActionResult> CancelOrder(int id)
@@ -368,22 +433,38 @@ namespace WebBanGiay.API.Controllers
                     return NotFound(new { message = "Order not found" });
                 }
 
-                if (order.Status != "pending")
+                // ============ STATE PATTERN ============
+                if (!_orderStateManager.IsValidTransition(order.Status, "cancelled"))
                 {
-                    return BadRequest(new { message = "Only pending orders can be cancelled" });
+                    return BadRequest(new { message = $"Cannot cancel order with status '{order.Status}'" });
                 }
 
-                order.Status = "cancelled";
-                order.UpdatedAt = DateTime.UtcNow;
+                // ============ COMMAND PATTERN ============
+                var cancelCommand = new CancelOrderCommand(_context, id, _loggerService);
+                await _commandInvoker.ExecuteCommandAsync(cancelCommand);
 
-                await _context.SaveChangesAsync();
+                // ============ SINGLETON PATTERN ============
+                _loggerService.LogInfo($"Order {id} cancelled successfully");
 
-                _logger.LogInformation("Order {Id} cancelled", id);
+                // ============ ADAPTER PATTERN ============
+                try
+                {
+                    await _notificationService.SendNotificationAsync(
+                        order.Email,
+                        $"Your order {order.OrderCode} has been cancelled.",
+                        "email",
+                        "Order Cancelled - WebBanGiay");
+                }
+                catch (Exception notifEx)
+                {
+                    _loggerService.LogWarning($"Notification failed (non-critical): {notifEx.Message}");
+                }
 
                 return Ok(new { message = "Order cancelled successfully" });
             }
             catch (Exception ex)
             {
+                _loggerService.LogError("Error cancelling order", ex);
                 _logger.LogError(ex, "Error cancelling order");
                 return StatusCode(500, new { message = "Error cancelling order" });
             }
@@ -456,49 +537,6 @@ namespace WebBanGiay.API.Controllers
                     LineTotal = i.LineTotal
                 }).ToList()
             };
-        }
-
-        /// <summary>
-        /// Validate if status transition is allowed
-        /// Prevents going backwards in the order lifecycle
-        /// </summary>
-        private static bool IsValidStatusTransition(string currentStatus, string newStatus)
-        {
-            // Status progression: pending -> confirmed -> shipping -> delivered
-            // cancelled can be reached from pending, confirmed, or shipping but not from delivered
-            
-            var statusOrder = new Dictionary<string, int>
-            {
-                ["pending"] = 1,
-                ["confirmed"] = 2, 
-                ["shipping"] = 3,
-                ["delivered"] = 4,
-                ["cancelled"] = 99 // Special status
-            };
-
-            // Same status is allowed (idempotent)
-            if (currentStatus == newStatus)
-                return true;
-
-            // Cannot change from delivered to anything else
-            if (currentStatus == "delivered")
-                return false;
-
-            // Cannot change from cancelled to anything else  
-            if (currentStatus == "cancelled")
-                return false;
-
-            // Can move to cancelled from pending, confirmed, or shipping
-            if (newStatus == "cancelled" && (currentStatus == "pending" || currentStatus == "confirmed" || currentStatus == "shipping"))
-                return true;
-
-            // For normal progression, can only move forward
-            if (statusOrder.ContainsKey(currentStatus) && statusOrder.ContainsKey(newStatus))
-            {
-                return statusOrder[newStatus] > statusOrder[currentStatus] && newStatus != "cancelled";
-            }
-
-            return false;
         }
     }
 }

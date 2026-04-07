@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using WebBanGiay.API.Data;
 using WebBanGiay.API.DTOs;
 using WebBanGiay.API.Middleware;
@@ -79,6 +80,7 @@ namespace WebBanGiay.API.Controllers
         /// GET /api/orders/5
         /// </summary>
         [HttpGet("{id}")]
+        [RequireCustomer]
         public async Task<ActionResult<OrderResponseDto>> GetOrder(int id)
         {
             try
@@ -92,6 +94,12 @@ namespace WebBanGiay.API.Controllers
                     return NotFound(new { message = "Order not found" });
                 }
 
+                var currentUserId = GetCurrentUserId();
+                if (!IsAdmin() && currentUserId != order.UserId)
+                {
+                    return Forbid();
+                }
+
                 return Ok(MapToResponseDto(order));
             }
             catch (Exception ex)
@@ -102,10 +110,61 @@ namespace WebBanGiay.API.Controllers
         }
 
         /// <summary>
+        /// Get orders for a specific user
+        /// GET /api/orders/user/5
+        /// </summary>
+        [HttpGet("user/{userId}")]
+        [RequireCustomer]
+        public async Task<ActionResult<PagedResult<OrderResponseDto>>> GetOrdersByUser(
+            int userId,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                var currentUserId = GetCurrentUserId();
+                if (currentUserId == null)
+                {
+                    return Unauthorized(new { message = "Unauthorized. Please login." });
+                }
+
+                if (!IsAdmin() && currentUserId != userId)
+                {
+                    return Forbid();
+                }
+
+                var query = _context.Orders
+                    .Include(o => o.OrderItems)
+                    .Where(o => o.UserId == userId);
+
+                var totalItems = await query.CountAsync();
+                var orders = await query
+                    .OrderByDescending(o => o.CreatedAt)
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                return Ok(new PagedResult<OrderResponseDto>
+                {
+                    Items = orders.Select(MapToResponseDto).ToList(),
+                    TotalCount = totalItems,
+                    PageNumber = pageNumber,
+                    PageSize = pageSize
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting user orders for user {UserId}", userId);
+                return StatusCode(500, new { message = "Error getting user orders" });
+            }
+        }
+
+        /// <summary>
         /// Get order by order code
         /// GET /api/orders/code/ORD123ABC
         /// </summary>
         [HttpGet("code/{orderCode}")]
+        [RequireCustomer]
         public async Task<ActionResult<OrderResponseDto>> GetOrderByCode(string orderCode)
         {
             try
@@ -117,6 +176,12 @@ namespace WebBanGiay.API.Controllers
                 if (order == null)
                 {
                     return NotFound(new { message = "Order not found" });
+                }
+
+                var currentUserId = GetCurrentUserId();
+                if (!IsAdmin() && currentUserId != order.UserId)
+                {
+                    return Forbid();
                 }
 
                 return Ok(MapToResponseDto(order));
@@ -157,10 +222,9 @@ namespace WebBanGiay.API.Controllers
                 var discount = dto.Discount; // Use discount from frontend (bulk + coupon + points)
                 var total = subtotal + shippingFee - discount;
 
-                // Create order
                 var order = new Order
                 {
-                    UserId = dto.UserId,
+                    UserId = GetCurrentUserId() ?? dto.UserId,
                     OrderCode = orderCode,
                     FullName = dto.FullName,
                     Email = dto.Email,
@@ -402,6 +466,22 @@ namespace WebBanGiay.API.Controllers
                     LineTotal = i.LineTotal
                 }).ToList()
             };
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (int.TryParse(userIdString, out var userId))
+            {
+                return userId;
+            }
+            return null;
+        }
+
+        private bool IsAdmin()
+        {
+            var role = User.FindFirst(ClaimTypes.Role)?.Value;
+            return !string.IsNullOrEmpty(role) && role.Equals("Admin", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

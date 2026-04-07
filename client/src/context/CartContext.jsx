@@ -40,16 +40,30 @@ export function CartProvider({ children }) {
                 if (savedCart) {
                     const cartItems = JSON.parse(savedCart);
                     
+                    // Fetch active sales
+                    let activeSales = [];
+                    try {
+                        const salesResponse = await fetch('http://localhost:5240/api/sales/active');
+                        if (salesResponse.ok) {
+                            activeSales = await salesResponse.json();
+                        }
+                    } catch {
+                        console.log('Could not fetch active sales');
+                    }
+                    
                     // Fetch latest product data to ensure bulkDiscountRules is present
                     const enrichedCart = await Promise.all(
                         cartItems.map(async (item) => {
-                            if (!item.bulkDiscountRules) {
+                            let enrichedItem = { ...item };
+                            
+                            // Fetch product data if bulkDiscountRules is missing
+                            if (!enrichedItem.bulkDiscountRules) {
                                 try {
                                     const response = await fetch(`http://localhost:5240/api/products/${item.id}`);
                                     if (response.ok) {
                                         const product = await response.json();
-                                        return {
-                                            ...item,
+                                        enrichedItem = {
+                                            ...enrichedItem,
                                             bulkDiscountRules: product.bulkDiscountRules
                                         };
                                     }
@@ -57,7 +71,16 @@ export function CartProvider({ children }) {
                                     console.log('Could not fetch product data for:', item.id);
                                 }
                             }
-                            return item;
+                            
+                            // Apply current sale discount if product is in any active sale
+                            const productSale = activeSales.find(sale => 
+                                sale.saleProducts && sale.saleProducts.some(sp => sp.productId === item.id)
+                            );
+                            if (productSale) {
+                                enrichedItem.saleDiscount = productSale.discountPercent;
+                            }
+                            
+                            return enrichedItem;
                         })
                     );
                     
@@ -132,7 +155,8 @@ export function CartProvider({ children }) {
                         stock: selectedSizeStock,
                         sizeInventory,
                         sizeString: product.size,
-                        bulkDiscountRules: product.bulkDiscountRules
+                        bulkDiscountRules: product.bulkDiscountRules,
+                        saleDiscount: product.saleDiscount || 0
                     }
                 ];
             }

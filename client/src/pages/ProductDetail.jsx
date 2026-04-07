@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { productsApi, reviewsApi } from '../api/api';
+import { productsApi, reviewsApi, salesApi } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useAuth } from '../context/AuthContext';
@@ -314,14 +314,19 @@ function ProductDetail() {
         }).format(price);
     };
 
-    const loadSaleDiscount = () => {
+    const loadSaleDiscount = async () => {
         try {
             if (!product) return;
-            const sales = JSON.parse(localStorage.getItem('sales') || '[]');
-            const activeSale = sales.find(s => 
-                s.isActive === true &&
-                s.productIds.includes(String(product.id))
-            );
+            const res = await salesApi.getActive();
+            const salesData = res.data?.value ?? res.data ?? [];
+            const activeSale = salesData.find(s => {
+                // Handle both API format (saleProducts) and legacy format (productIds)
+                if (s.saleProducts) {
+                    return s.saleProducts.some(sp => sp.productId === product.id || String(sp.productId) === String(product.id));
+                }
+                // Legacy format fallback
+                return s.productIds && s.productIds.includes(String(product.id));
+            });
             setSaleDiscount(activeSale ? activeSale.discountPercent : 0);
         } catch (err) {
             console.error('Error loading sale discount:', err);
@@ -332,12 +337,16 @@ function ProductDetail() {
     useEffect(() => {
         loadSaleDiscount();
         const handleSalesUpdate = (event) => {
-            if (event.key === 'sales' || event.key === 'saleUpdated') {
+            if (!event.key || event.key === 'saleUpdated') {
                 loadSaleDiscount();
             }
         };
+        window.addEventListener('saleUpdated', handleSalesUpdate);
         window.addEventListener('storage', handleSalesUpdate);
-        return () => window.removeEventListener('storage', handleSalesUpdate);
+        return () => {
+            window.removeEventListener('saleUpdated', handleSalesUpdate);
+            window.removeEventListener('storage', handleSalesUpdate);
+        };
     }, [product]);
 
     const handleAddToCart = () => {
@@ -486,21 +495,6 @@ function ProductDetail() {
                             {totalStock > 0 ? `✓ Còn ${totalStock} sản phẩm` : '✕ Hết hàng'}
                         </div>
                     </div>
-
-                    {/* Bulk Discount Badges */}
-                    {product.bulkDiscountRules && (
-                        <div className="bulk-discount-section">
-                            <h4>🎁 Giảm giá theo số lượng</h4>
-                            <div className="discount-tiers">
-                                {JSON.parse(product.bulkDiscountRules).map((rule, idx) => (
-                                    <div key={idx} className="discount-tier">
-                                        <span className="tier-qty">Mua {rule.minQty}+</span>
-                                        <span className="tier-discount">-{rule.discount}%</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
 
                     <div className="product-description-section">
                         <h3>Mô tả sản phẩm</h3>

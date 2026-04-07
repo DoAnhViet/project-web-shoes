@@ -22,6 +22,8 @@ namespace WebBanGiay.API.Data
         public DbSet<UserPoints> UserPoints { get; set; }
         public DbSet<PointsTransaction> PointsTransactions { get; set; }
         public DbSet<Message> Messages { get; set; }
+        public DbSet<Sale> Sales { get; set; }
+        public DbSet<SaleProduct> SaleProducts { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -157,6 +159,23 @@ namespace WebBanGiay.API.Data
                     Color = "Nâu"
                 }
             );
+
+            // Configure Sale -> SaleProduct -> Product (Many-to-Many through junction table)
+            modelBuilder.Entity<SaleProduct>()
+                .HasOne(sp => sp.Sale)
+                .WithMany(s => s.SaleProducts)
+                .HasForeignKey(sp => sp.SaleId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<SaleProduct>()
+                .HasOne(sp => sp.Product)
+                .WithMany(p => p.SaleProducts)
+                .HasForeignKey(sp => sp.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Create composite primary key for SaleProduct
+            modelBuilder.Entity<SaleProduct>()
+                .HasKey(sp => new { sp.SaleId, sp.ProductId });
         }
     }
 }

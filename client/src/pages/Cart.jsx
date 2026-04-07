@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 import { ordersApi } from '../api/api';
 import './Cart.css';
 
 function Cart() {
     const navigate = useNavigate();
     const { cart, removeFromCart, updateQuantity, clearCart, getTotalPrice, getTotalItems } = useCart();
+    const { user } = useAuth();
     const [showCheckout, setShowCheckout] = useState(false);
     const [orderCreated, setOrderCreated] = useState(null);
     const [formData, setFormData] = useState({
@@ -137,6 +139,7 @@ function Cart() {
         const paymentMethod = formData.paymentMethod === 'ewallet' ? 'momo' : formData.paymentMethod;
 
         const apiPayload = {
+            userId: user?.id,
             fullName: formData.fullName,
             email: formData.email,
             phone: formData.phone,
@@ -147,15 +150,18 @@ function Cart() {
             note: formData.note || '',
             paymentMethod,
             discount,
-            items: cart.map(item => ({
-                productId: item.id,
-                productName: item.name,
-                productImage: item.imageUrl || item.image || '',
-                size: item.size || '',
-                color: item.color || '',
-                price: item.price,
-                quantity: item.quantity
-            }))
+            items: cart.map(item => {
+                const effectivePrice = item.saleDiscount ? item.price * (1 - item.saleDiscount / 100) : item.price;
+                return {
+                    productId: item.id,
+                    productName: item.name,
+                    productImage: item.imageUrl || item.image || '',
+                    size: item.size || '',
+                    color: item.color || '',
+                    price: effectivePrice,
+                    quantity: item.quantity
+                };
+            })
         };
 
         const customerInfo = {
@@ -187,17 +193,20 @@ function Cart() {
             status: 'pending',
             createdAt: new Date().toISOString(),
             updatedAt: null,
-            items: cart.map(item => ({
-                id: item.id,
-                productId: item.id,
-                productName: item.name,
-                productImage: item.imageUrl || item.image || '',
-                size: item.size || '',
-                color: item.color || '',
-                price: item.price,
-                quantity: item.quantity,
-                lineTotal: item.price * item.quantity
-            }))
+            items: cart.map(item => {
+                const effectivePrice = item.saleDiscount ? item.price * (1 - item.saleDiscount / 100) : item.price;
+                return {
+                    id: item.id,
+                    productId: item.id,
+                    productName: item.name,
+                    productImage: item.imageUrl || item.image || '',
+                    size: item.size || '',
+                    color: item.color || '',
+                    price: effectivePrice,
+                    quantity: item.quantity,
+                    lineTotal: effectivePrice * item.quantity
+                };
+            })
         };
 
         try {

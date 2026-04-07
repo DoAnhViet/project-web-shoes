@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { productsApi, categoriesApi } from '../api/api';
+import { productsApi, categoriesApi, salesApi } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import './Home.css';
@@ -45,82 +45,102 @@ function Home() {
     'sneaker': 3
   };
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
+  // Load products and categories
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      
+      // First load categories to get the mapping
+      const categoriesRes = await categoriesApi.getAll();
+      const categoriesData = categoriesRes.data?.value ?? categoriesRes.data ?? [];
+      setCategories(categoriesData);
+      
+      // Now load products with proper category filtering
+      const params = { pageSize: 10000 };
+      if (selectedCategory) {
+        // Try to find the category by name first
+        const foundCategory = categoriesData.find(cat => 
+          cat.name.toLowerCase() === selectedCategory.toLowerCase() ||
+          categoryNameMap[cat.name.toLowerCase()] === selectedCategory
+        );
         
-        // First load categories to get the mapping
-        const categoriesRes = await categoriesApi.getAll();
-        const categoriesData = categoriesRes.data?.value ?? categoriesRes.data ?? [];
-        setCategories(categoriesData);
-        
-        // Now load products with proper category filtering
-        const params = {};
-        if (selectedCategory) {
-          // Try to find the category by name first
-          const foundCategory = categoriesData.find(cat => 
-            cat.name.toLowerCase() === selectedCategory.toLowerCase() ||
-            categoryNameMap[cat.name.toLowerCase()] === selectedCategory
-          );
-          
-          if (foundCategory) {
-            params.categoryId = foundCategory.id;
+        if (foundCategory) {
+          params.categoryId = foundCategory.id;
+        } else {
+          // Fallback to name mapping
+          const categoryKey = categoryNameMap[selectedCategory.toLowerCase()] || selectedCategory.toLowerCase();
+          if (catMap[categoryKey]) {
+            params.categoryId = catMap[categoryKey];
           } else {
-            // Fallback to name mapping
-            const categoryKey = categoryNameMap[selectedCategory.toLowerCase()] || selectedCategory.toLowerCase();
-            if (catMap[categoryKey]) {
-              params.categoryId = catMap[categoryKey];
-            } else {
-              // If it's already a number (ID), use it directly
-              const categoryId = parseInt(selectedCategory);
-              if (!isNaN(categoryId)) {
-                params.categoryId = categoryId;
-              }
+            // If it's already a number (ID), use it directly
+            const categoryId = parseInt(selectedCategory);
+            if (!isNaN(categoryId)) {
+              params.categoryId = categoryId;
             }
           }
         }
-
-        const productsRes = await productsApi.getAll(params);
-        const productsData = productsRes.data?.items ?? productsRes.data?.value ?? productsRes.data ?? [];
-
-        setProducts(productsData);
-        if (productsData && productsData.length > 0) {
-          setFeaturedProduct(productsData[0]);
-        }
-        
-        // Load sales
-        loadActiveSales();
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setLoading(false);
       }
-    };
-    loadData();
+
+      const productsRes = await productsApi.getAll(params);
+      const productsData = productsRes.data?.items ?? productsRes.data?.value ?? productsRes.data ?? [];
+
+      setProducts(productsData);
+      if (productsData && productsData.length > 0) {
+        setFeaturedProduct(productsData[0]);
+      }
+      
+      // Load sales
+      loadActiveSales();
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
   }, [selectedCategory]);
 
-  const loadActiveSales = () => {
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const loadActiveSales = async () => {
     try {
-      const sales = JSON.parse(localStorage.getItem('sales') || '[]');
-      const activeSales = sales.filter(s => s.isActive === true);
-      setActiveSales(activeSales);
+      const res = await salesApi.getActive();
+      const salesData = res.data?.value ?? res.data ?? [];
+      setActiveSales(salesData);
     } catch (err) {
       console.error('Error loading sales:', err);
       setActiveSales([]);
     }
   };
 
-  // Listen for sales updates
+  // Listen for product and sales updates
   useEffect(() => {
     const handleStorageChange = (event) => {
       if (event.key === 'sales' || event.key === 'saleUpdated') {
         loadActiveSales();
       }
+      if (event.key === 'productUpdated') {
+        loadData();
+      }
     };
+    
+    const handleCustomProductUpdate = () => {
+      loadData();
+    };
+    
+    const handleCustomSaleUpdate = () => {
+      loadActiveSales();
+    };
+    
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+    window.addEventListener('productUpdated', handleCustomProductUpdate);
+    window.addEventListener('saleUpdated', handleCustomSaleUpdate);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('productUpdated', handleCustomProductUpdate);
+      window.removeEventListener('saleUpdated', handleCustomSaleUpdate);
+    };
+  }, [loadData]);
 
   // Show notification when sales exist
   useEffect(() => {
@@ -139,9 +159,12 @@ function Home() {
   };
 
   const getSaleDiscount = (productId) => {
-    const sale = activeSales.find(s => 
-      s.productIds.includes(String(productId))
-    );
+    const sale = activeSales.find(s => {
+      if (s.saleProducts) {
+        return s.saleProducts.some(sp => sp.productId === productId || String(sp.productId) === String(productId));
+      }
+      return s.productIds?.includes(String(productId));
+    });
     return sale ? sale.discountPercent : 0;
   };
 
@@ -383,10 +406,12 @@ function Home() {
                         navigate('/login');
                         return;
                       }
+                      const saleDiscount = getSaleDiscount(product.id);
                       addToCart({
                         ...product,
                         size: product.size,
-                        color: product.color
+                        color: product.color,
+                        saleDiscount: saleDiscount || 0
                       }, 1);
                     }}
                   >

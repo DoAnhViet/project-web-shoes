@@ -8,34 +8,66 @@ const OrderDetail = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const { addNotification } = useNotification();
 
+  const normalizeOrder = (orderData) => ({
+    id: orderData.id || orderData.orderId,
+    orderId: orderData.orderCode || orderData.orderId || orderData.id,
+    orderCode: orderData.orderCode || `#${orderData.id || orderData.orderId}`,
+    status: orderData.status || 'pending',
+    paymentMethod: orderData.paymentMethod || 'cod',
+    paymentStatus: orderData.paymentStatus || 'pending',
+    subtotal: Number(orderData.subtotal || orderData.total || 0),
+    shippingFee: Number(orderData.shippingFee || orderData.shipping || 0),
+    discount: Number(orderData.discount || 0),
+    total: Number(orderData.total || 0),
+    createdAt: orderData.createdAt || orderData.orderDate || orderData.date,
+    fullName: orderData.fullName || orderData.customerName || orderData.shippingInfo?.fullName,
+    email: orderData.email || orderData.customerEmail || orderData.shippingInfo?.email,
+    phone: orderData.phone || orderData.customerPhone || orderData.shippingInfo?.phone,
+    address: orderData.address || orderData.shippingInfo?.address,
+    ward: orderData.ward || orderData.shippingInfo?.ward,
+    district: orderData.district || orderData.shippingInfo?.district,
+    city: orderData.city || orderData.shippingInfo?.city,
+    note: orderData.note || orderData.shippingInfo?.note,
+    items: Array.isArray(orderData.items)
+      ? orderData.items.map(item => ({
+          productId: item.productId || item.id,
+          name: item.productName || item.name,
+          image: item.productImage || item.imageUrl || item.image,
+          size: item.size,
+          color: item.color,
+          price: Number(item.price || 0),
+          quantity: Number(item.quantity || item.qty || 0),
+          lineTotal: Number(item.lineTotal || item.price * item.quantity || 0)
+        }))
+      : []
+  });
+
   useEffect(() => {
-    const loadOrder = () => {
-      const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-      const found = orders.find(o => String(o.orderId) === String(orderId) || String(o.id) === String(orderId));
-      setOrder(found);
-    };
+    const loadOrder = async () => {
+      setLoading(true);
+      setError(null);
 
-    loadOrder();
-
-    const handleStorage = (event) => {
-      if (event.key === 'orders' || event.key === 'lastOrderSync') {
-        loadOrder();
+      try {
+        const response = await ordersApi.getById(orderId);
+        setOrder(normalizeOrder(response.data));
+      } catch (err) {
+        console.error('Error loading order detail:', err);
+        setError('Không thể tải thông tin đơn hàng từ server.');
+        const orders = JSON.parse(localStorage.getItem('orders') || '[]');
+        const found = orders.find(o => String(o.orderId) === String(orderId) || String(o.id) === String(orderId));
+        if (found) {
+          setOrder(normalizeOrder(found));
+        }
+      } finally {
+        setLoading(false);
       }
     };
 
-    const handleFocus = () => {
-      loadOrder();
-    };
-
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('focus', handleFocus);
-
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('focus', handleFocus);
-    };
+    loadOrder();
   }, [orderId]);
 
   const handleCancelOrder = async () => {
@@ -44,27 +76,23 @@ const OrderDetail = () => {
     }
 
     try {
-      // Try to cancel via API first
-      await ordersApi.cancel(orderId);
+      await ordersApi.cancel(order.id);
       addNotification('✅ Đơn hàng đã được hủy thành công', 3000);
+      setOrder(prev => ({ ...prev, status: 'cancelled' }));
     } catch (error) {
-      console.error('API cancel failed, updating locally:', error);
+      console.error('API cancel failed:', error);
+      addNotification('⚠️ Không thể hủy đơn hàng từ server.', 3000);
     }
 
-    // Update local storage
     const orders = JSON.parse(localStorage.getItem('orders') || '[]');
     const updatedOrders = orders.map(o => {
       const currentOrderId = o.orderId || o.id;
-      if (currentOrderId === orderId) {
+      if (String(currentOrderId) === String(order.id)) {
         return { ...o, status: 'cancelled' };
       }
       return o;
     });
     localStorage.setItem('orders', JSON.stringify(updatedOrders));
-    
-    // Update current order state
-    setOrder(prev => ({ ...prev, status: 'cancelled' }));
-    addNotification('✅ Đơn hàng đã được hủy', 3000);
   };
 
   const formatPrice = (price) => {
@@ -78,7 +106,7 @@ const OrderDetail = () => {
     if (!dateValue) return 'N/A';
     const date = new Date(dateValue);
     if (isNaN(date.getTime())) return 'N/A';
-    return includeTime 
+    return includeTime
       ? date.toLocaleString('vi-VN')
       : date.toLocaleDateString('vi-VN');
   };
@@ -122,6 +150,16 @@ const OrderDetail = () => {
     }));
   };
 
+  if (loading) {
+    return (
+      <div className="order-detail-container">
+        <div className="not-found">
+          <h2>Đang tải thông tin đơn hàng...</h2>
+        </div>
+      </div>
+    );
+  }
+
   if (!order) {
     return (
       <div className="order-detail-container">
@@ -136,10 +174,16 @@ const OrderDetail = () => {
 
   const statusInfo = getStatusInfo(order.status);
   const timelineSteps = getTimelineSteps();
+  const estimateDateRange = (() => {
+    const created = new Date(order.createdAt);
+    if (isNaN(created.getTime())) return 'N/A';
+    const from = new Date(created.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const to = new Date(created.getTime() + 5 * 24 * 60 * 60 * 1000);
+    return `${from.toLocaleDateString('vi-VN')} - ${to.toLocaleDateString('vi-VN')}`;
+  })();
 
   return (
     <div className="order-detail-container">
-      {/* Back Button */}
       <div className="header-actions">
         <button className="back-button" onClick={() => navigate(-1)}>
           ← Quay lại
@@ -151,17 +195,14 @@ const OrderDetail = () => {
         )}
       </div>
 
-      {/* Order Header */}
       <div className="order-detail-header">
         <div className="header-left">
           <h1>Chi tiết đơn hàng</h1>
           <div className="order-id-display">
             <span className="label">Mã đơn:</span>
-            <span className="order-id">{order.orderId}</span>
+            <span className="order-id">{order.orderCode}</span>
           </div>
-          <p className="order-date">
-            Đặt ngày: {formatDate(order.orderDate, true)}
-          </p>
+          <p className="order-date">Đặt ngày: {formatDate(order.createdAt, true)}</p>
         </div>
         <div className="header-right">
           <span className={`status-badge ${statusInfo.color}`}>
@@ -170,16 +211,14 @@ const OrderDetail = () => {
         </div>
       </div>
 
-      {/* Timeline */}
       {order.status !== 'cancelled' && (
         <div className="order-timeline-section">
           <h3>Trạng thái đơn hàng</h3>
           <div className="timeline-track">
             {timelineSteps.map((step, index) => (
-              <div 
-                key={step.key} 
-                className={`timeline-item ${step.active ? 'active' : ''} ${step.current ? 'current' : ''}`}
-              >
+              <div
+                key={step.key}
+                className={`timeline-item ${step.active ? 'active' : ''} ${step.current ? 'current' : ''}`}>
                 <div className="timeline-dot">
                   <span>{step.icon}</span>
                 </div>
@@ -193,7 +232,6 @@ const OrderDetail = () => {
         </div>
       )}
 
-      {/* Cancelled Notice */}
       {order.status === 'cancelled' && (
         <div className="cancelled-notice">
           <span className="icon">✕</span>
@@ -204,26 +242,30 @@ const OrderDetail = () => {
         </div>
       )}
 
+      {error && (
+        <div className="order-error">
+          <p>{error}</p>
+        </div>
+      )}
+
       <div className="order-detail-content">
-        {/* Left Column */}
         <div className="detail-left">
-          {/* Shipping Info */}
           <div className="detail-card">
             <h3>📍 Thông tin giao hàng</h3>
             <div className="card-content">
-              <p className="recipient-name">{order.shippingInfo?.fullName}</p>
-              <p>{order.shippingInfo?.phone}</p>
-              <p>{order.shippingInfo?.email}</p>
+              <p className="recipient-name">{order.fullName}</p>
+              <p>{order.phone}</p>
+              <p>{order.email}</p>
               <p className="address">
-                {order.shippingInfo?.address}, {order.shippingInfo?.ward}, {order.shippingInfo?.district}, {order.shippingInfo?.city}
+                {order.address}
+                {order.ward ? `, ${order.ward}` : ''}
+                {order.district ? `, ${order.district}` : ''}
+                {order.city ? `, ${order.city}` : ''}
               </p>
-              {order.shippingInfo?.note && (
-                <p className="note">Ghi chú: {order.shippingInfo.note}</p>
-              )}
+              {order.note && <p className="note">Ghi chú: {order.note}</p>}
             </div>
           </div>
 
-          {/* Payment Info */}
           <div className="detail-card">
             <h3>💳 Thông tin thanh toán</h3>
             <div className="card-content">
@@ -239,13 +281,12 @@ const OrderDetail = () => {
                   <p><strong>Ngân hàng:</strong> Vietcombank</p>
                   <p><strong>Số TK:</strong> 1234567890123</p>
                   <p><strong>Chủ TK:</strong> CÔNG TY KICKS VIETNAM</p>
-                  <p className="transfer-note">* Nội dung CK: {order.orderId}</p>
+                  <p className="transfer-note">* Nội dung CK: {order.orderCode}</p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Order Items */}
           <div className="detail-card">
             <h3>📦 Sản phẩm ({order.items?.length || 0})</h3>
             <div className="items-list">
@@ -268,11 +309,9 @@ const OrderDetail = () => {
           </div>
         </div>
 
-        {/* Right Column - Summary */}
         <div className="detail-right">
           <div className="summary-card">
             <h3>Tổng đơn hàng</h3>
-            
             <div className="summary-rows">
               <div className="summary-row">
                 <span>Tạm tính</span>
@@ -280,7 +319,7 @@ const OrderDetail = () => {
               </div>
               <div className="summary-row">
                 <span>Phí vận chuyển</span>
-                <span>{order.shipping === 0 ? 'Miễn phí' : formatPrice(order.shipping)}</span>
+                <span>{order.shippingFee === 0 ? 'Miễn phí' : formatPrice(order.shippingFee)}</span>
               </div>
               {order.discount > 0 && (
                 <div className="summary-row discount">
@@ -297,7 +336,6 @@ const OrderDetail = () => {
               <span>{formatPrice(order.total)}</span>
             </div>
 
-            {/* Actions */}
             <div className="summary-actions">
               {order.status === 'pending' && (
                 <button className="btn-cancel" onClick={handleCancelOrder}>
@@ -313,21 +351,12 @@ const OrderDetail = () => {
             </div>
           </div>
 
-          {/* Estimated Delivery */}
           {order.status !== 'cancelled' && order.status !== 'delivered' && (
             <div className="delivery-estimate">
               <span className="icon">📅</span>
               <div>
                 <p className="label">Dự kiến giao hàng</p>
-                <p className="date">
-                  {(() => {
-                    const orderDate = new Date(order.orderDate);
-                    if (isNaN(orderDate.getTime())) return 'N/A';
-                    const from = new Date(orderDate.getTime() + 3*24*60*60*1000);
-                    const to = new Date(orderDate.getTime() + 5*24*60*60*1000);
-                    return `${from.toLocaleDateString('vi-VN')} - ${to.toLocaleDateString('vi-VN')}`;
-                  })()}
-                </p>
+                <p className="date">{estimateDateRange}</p>
               </div>
             </div>
           )}

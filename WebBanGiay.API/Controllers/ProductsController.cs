@@ -32,7 +32,7 @@ namespace WebBanGiay.API.Controllers
             [FromQuery] string? size = null,
             [FromQuery] string? color = null,
             [FromQuery] int pageNumber = 1,
-            [FromQuery] int pageSize = 10)
+            [FromQuery] int pageSize = 10000)
         {
             try
             {

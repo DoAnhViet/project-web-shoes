@@ -36,7 +36,12 @@ api.interceptors.request.use(
 );
 
 export const productsApi = {
-  getAll: (params) => api.get('/products', { params }),
+  getAll: (params = {}) => {
+    if (!params.pageSize) {
+      params.pageSize = 10000;
+    }
+    return api.get('/products', { params });
+  },
   getById: (id) => api.get(`/products/${id}`),
   create: (data) => api.post('/products', data),
   update: (id, data) => api.put(`/products/${id}`, data),
@@ -63,6 +68,7 @@ export const reviewsApi = {
 
 export const ordersApi = {
   getAll: (params) => api.get('/orders', { params }),
+  getByUser: (userId, params = {}) => api.get(`/orders/user/${userId}`, { params }),
   getById: (id) => api.get(`/orders/${id}`),
   getByCode: (orderCode) => api.get(`/orders/code/${orderCode}`),
   create: (data) => api.post('/orders', data),
@@ -78,6 +84,17 @@ export const usersApi = {
   updateRole: (id, role) => api.patch(`/users/${id}/role`, { role }),
   update: (id, data) => api.put(`/users/${id}`, data),
   delete: (id) => api.delete(`/users/${id}`)
+};
+
+export const salesApi = {
+  getAll: () => api.get('/sales'),
+  getActive: () => api.get('/sales/active'),
+  getById: (id) => api.get(`/sales/${id}`),
+  create: (data) => api.post('/sales', data),
+  update: (id, data) => api.put(`/sales/${id}`, data),
+  delete: (id) => api.delete(`/sales/${id}`),
+  addProduct: (saleId, productId) => api.post(`/sales/${saleId}/products`, { productId }),
+  removeProduct: (saleId, productId) => api.delete(`/sales/${saleId}/products/${productId}`)
 };
 
 // Helper to get or generate session ID for guest cart

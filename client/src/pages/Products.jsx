@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { productsApi } from '../api/api';
+import { productsApi, salesApi } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import './Products.css';
@@ -38,10 +38,10 @@ function Products() {
     'sneaker': 'Giày Sneaker'
   };
 
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
     try {
       setLoading(true);
-      const params = {};
+      const params = { pageSize: 10000 };
       const catMap = {
         'men': 4,
         'women': 5,
@@ -73,11 +73,15 @@ function Products() {
 
       // If this is the sale category page, only show products currently in active sales
       if (category === 'sale') {
-        const sales = JSON.parse(localStorage.getItem('sales') || '[]');
+        const salesRes = await salesApi.getActive();
+        const activeSalesData = salesRes.data?.value ?? salesRes.data ?? [];
         const activeSalesIds = new Set(
-          sales
-            .filter(s => s.isActive === true)
-            .flatMap(s => s.productIds.map(String))
+          activeSalesData.flatMap(sale => {
+            if (sale.saleProducts) {
+              return sale.saleProducts.map(sp => String(sp.productId));
+            }
+            return sale.productIds ? sale.productIds.map(String) : [];
+          })
         );
         productsData = productsData.filter(p => activeSalesIds.has(String(p.id)));
       }
@@ -89,31 +93,54 @@ function Products() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [category, searchQuery]);
 
   useEffect(() => {
     loadProducts();
     loadActiveSales();
-    
-    // Listen for sales updates
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [category, searchQuery]);
+  }, [loadProducts]);
 
-  const handleStorageChange = (event) => {
-    if (event.key === 'sales' || event.key === 'saleUpdated') {
+  // Listen for products and sales updates (both cross-tab and same-tab)
+  useEffect(() => {
+    const handleStorageChange = (event) => {
+      if (event.key === 'sales' || event.key === 'saleUpdated') {
+        loadActiveSales();
+        if (category === 'sale') {
+          loadProducts();
+        }
+      }
+      if (event.key === 'productUpdated') {
+        loadProducts();
+      }
+    };
+    
+    const handleCustomProductUpdate = () => {
+      loadProducts();
+    };
+    
+    const handleCustomSaleUpdate = () => {
       loadActiveSales();
       if (category === 'sale') {
         loadProducts();
       }
-    }
-  };
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('productUpdated', handleCustomProductUpdate);
+    window.addEventListener('saleUpdated', handleCustomSaleUpdate);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('productUpdated', handleCustomProductUpdate);
+      window.removeEventListener('saleUpdated', handleCustomSaleUpdate);
+    };
+  }, [loadProducts, category]);
 
-  const loadActiveSales = () => {
+  const loadActiveSales = async () => {
     try {
-      const sales = JSON.parse(localStorage.getItem('sales') || '[]');
-      const activeSales = sales.filter(s => s.isActive === true);
-      setActiveSales(activeSales);
+      const res = await salesApi.getActive();
+      const salesData = res.data?.value ?? res.data ?? [];
+      setActiveSales(salesData);
     } catch (err) {
       console.error('Error loading sales:', err);
       setActiveSales([]);
@@ -187,9 +214,12 @@ function Products() {
   };
 
   const getSaleDiscount = (productId) => {
-    const sale = activeSales.find(s => 
-      s.productIds.includes(String(productId))
-    );
+    const sale = activeSales.find(s => {
+      if (s.saleProducts) {
+        return s.saleProducts.some(sp => sp.productId === productId || String(sp.productId) === String(productId));
+      }
+      return s.productIds?.includes(String(productId));
+    });
     return sale ? sale.discountPercent : 0;
   };
 
@@ -203,10 +233,12 @@ function Products() {
       return;
     }
 
+    const saleDiscount = getSaleDiscount(product.id);
     addToCart({
       ...product,
       size: product.size,
-      color: product.color
+      color: product.color,
+      saleDiscount: saleDiscount || 0
     }, 1);
   };
 

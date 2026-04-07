@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { productsApi, categoriesApi, ordersApi, usersApi } from '../api/api';
+import { productsApi, categoriesApi, ordersApi, usersApi, salesApi } from '../api/api';
 import { useNotification } from '../context/NotificationContext';
+import OrderDetailModal from '../components/OrderDetailModal';
 import './Admin.css';
 
 const PASSWORD_UNCHANGED_MASK = '********';
@@ -466,7 +467,9 @@ function Admin() {
         addNotification(`✅ Đã thêm sản phẩm mới "${data.name}"`, 3000);
       }
 
-      // Trigger product update event for ProductDetail to refresh
+      // Dispatch custom event for product update sync across all pages
+      window.dispatchEvent(new CustomEvent('productUpdated', { detail: { productId, timestamp: Date.now() } }));
+      localStorage.setItem('productUpdated', JSON.stringify({ productId, timestamp: Date.now() }));
       localStorage.setItem('adminProductUpdate', JSON.stringify({ 
         productId: productId,
         timestamp: Date.now()
@@ -477,8 +480,8 @@ function Admin() {
       resetForm();
       setErrors({});
 
-      // Reload data
-      const productsRes = await productsApi.getAll();
+      // Reload data with proper pageSize
+      const productsRes = await productsApi.getAll({ pageSize: 10000 });
       setProducts(productsRes.data?.items ?? productsRes.data ?? []);
     } catch (error) {
       console.error('Error saving product:', error);
@@ -512,7 +515,12 @@ function Admin() {
       try {
         await productsApi.delete(id);
         addNotification(`🗑️ Đã xóa sản phẩm "${product?.name || id}"`, 3000);
-        const productsRes = await productsApi.getAll();
+        
+        // Dispatch custom event for product update sync
+        window.dispatchEvent(new CustomEvent('productUpdated', { detail: { deleted: true, productId: id, timestamp: Date.now() } }));
+        localStorage.setItem('productUpdated', JSON.stringify({ deleted: true, productId: id, timestamp: Date.now() }));
+        
+        const productsRes = await productsApi.getAll({ pageSize: 10000 });
         setProducts(productsRes.data?.items ?? productsRes.data ?? []);
       } catch (error) {
         console.error('Error deleting product:', error);
@@ -632,12 +640,14 @@ function Admin() {
   };
 
   // Sale Management Functions
-  const loadActiveSales = () => {
+  const loadActiveSales = async () => {
     try {
-      const sales = JSON.parse(localStorage.getItem('sales') || '[]');
-      setActiveSales(sales.filter(s => s.isActive));
+      const res = await salesApi.getActive();
+      const salesData = res.data?.value ?? res.data ?? [];
+      setActiveSales(salesData);
     } catch (err) {
       console.error('Error loading sales:', err);
+      setActiveSales([]);
     }
   };
 
@@ -661,7 +671,7 @@ function Admin() {
     }
   };
 
-  const handleCreateSale = () => {
+  const handleCreateSale = async () => {
     console.log('[Admin] handleCreateSale called - selectedProducts:', selectedProducts.size);
     
     if (!saleData.saleName.trim()) {
@@ -682,43 +692,49 @@ function Admin() {
 
     try {
       const productCount = selectedProducts.size;
-      const productIdsArray = Array.from(selectedProducts).map(String);
+      const productIdsArray = Array.from(selectedProducts).map(id => parseInt(id));
       
-      const newSale = {
-        id: `sale_${Date.now()}`,
+      const saleRequest = {
         name: saleData.saleName,
+        description: '',
         discountPercent: parseInt(saleData.discountPercent),
-        productIds: productIdsArray,
         isActive: true,
-        createdAt: new Date().toISOString()
+        productIds: productIdsArray
       };
 
-      const sales = JSON.parse(localStorage.getItem('sales') || '[]');
-      sales.push(newSale);
-      localStorage.setItem('sales', JSON.stringify(sales));
+      const response = await salesApi.create(saleRequest);
+      const newSale = response.data;
       
-      setActiveSales(sales.filter(sale => sale.isActive === true));
+      // Dispatch custom event for same-tab sync and cross-tab sync
+      window.dispatchEvent(new CustomEvent('saleUpdated', { detail: { newSale } }));
+      localStorage.setItem('saleUpdated', JSON.stringify({ timestamp: Date.now() }));
+      
+      // Reload sales list
+      await loadActiveSales();
+      
       setSaleData({ discountPercent: '', saleName: '' });
       setSelectedProducts(new Set());
       setShowSaleModal(false);
       addNotification(`✅ Tạo chương trình sale "${saleData.saleName}" thành công! Áp dụng cho ${productCount} sản phẩm`, 3000);
-      
-      localStorage.setItem('saleUpdated', JSON.stringify({ timestamp: Date.now() }));
+
     } catch (err) {
       console.error('[Admin Sale] Error creating sale:', err);
       addNotification('❌ Không thể tạo chương trình sale', 3000);
     }
   };
 
-  const handleDeleteSale = (saleId) => {
+  const handleDeleteSale = async (saleId) => {
     if (window.confirm('Xóa chương trình sale này?')) {
       try {
-        const sales = JSON.parse(localStorage.getItem('sales') || '[]');
-        const updated = sales.filter(s => s.id !== saleId);
-        localStorage.setItem('sales', JSON.stringify(updated));
-        setActiveSales(updated.filter(sale => sale.isActive === true));
-        addNotification('✅ Đã xóa chương trình sale', 3000);
+        await salesApi.delete(saleId);
+        
+        // Dispatch custom event for same-tab sync and cross-tab sync
+        window.dispatchEvent(new CustomEvent('saleUpdated', { detail: { deleted: true, saleId } }));
         localStorage.setItem('saleUpdated', JSON.stringify({ timestamp: Date.now() }));
+        
+        // Reload sales list
+        await loadActiveSales();
+        addNotification('✅ Đã xóa chương trình sale', 3000);
       } catch (err) {
         console.error('Error deleting sale:', err);
         addNotification('❌ Không thể xóa chương trình sale', 3000);
@@ -727,9 +743,14 @@ function Admin() {
   };
 
   const getProductSaleDiscount = (productId) => {
-    const activeSale = activeSales.find(sale => 
-      sale.productIds.includes(String(productId))
-    );
+    const activeSale = activeSales.find(sale => {
+      // Handle both API format (saleProducts) and legacy format (productIds)
+      if (sale.saleProducts) {
+        return sale.saleProducts.some(sp => sp.productId === productId || String(sp.productId) === String(productId));
+      }
+      // Legacy format fallback
+      return sale.productIds && sale.productIds.includes(String(productId));
+    });
     return activeSale ? activeSale.discountPercent : 0;
   };
 
@@ -738,6 +759,7 @@ function Admin() {
     const totalValue = Number(order.total ?? order.totalAmount ?? order.totalPrice ?? 0);
     const subtotalValue = Number(order.subtotal ?? order.subtotalAmount ?? order.total ?? 0);
     const shippingValue = Number(order.shippingFee ?? order.shipping ?? order.shippingCost ?? 0);
+    const discountValue = Number(order.discount ?? order.discountAmount ?? 0);
 
     const shippingInfo = order.shippingInfo || {
       fullName: order.fullName || order.customerInfo?.fullName || '',
@@ -746,7 +768,8 @@ function Admin() {
       address: order.address || order.customerInfo?.address || '',
       city: order.city || order.customerInfo?.city || '',
       district: order.district || order.customerInfo?.district || order.customerInfo?.postalCode || '',
-      ward: order.ward || order.customerInfo?.ward || ''
+      ward: order.ward || order.customerInfo?.ward || '',
+      note: order.note || order.customerInfo?.note || ''
     };
 
     return {
@@ -759,6 +782,7 @@ function Admin() {
       total: totalValue,
       subtotal: subtotalValue,
       shipping: shippingValue,
+      discount: discountValue,
       status: order.status || 'pending',
       paymentMethod: order.paymentMethod || 'cod',
       paymentStatus: order.paymentStatus || 'pending',
@@ -1775,7 +1799,7 @@ function Admin() {
                           🏷️ Giảm giá: <strong style={{ color: '#ff6b6b', fontSize: '16px' }}>{sale.discountPercent}%</strong>
                         </p>
                         <p style={{ margin: '0 0 8px 0', color: '#666', fontSize: '14px' }}>
-                          📦 Số sản phẩm: <strong>{sale.productIds.length}</strong> sản phẩm
+                          📦 Số sản phẩm: <strong>{sale.saleProducts?.length ?? sale.productIds?.length ?? 0}</strong> sản phẩm
                         </p>
                         <p style={{ margin: '0', color: '#999', fontSize: '12px' }}>
                           📅 Tạo lúc: {new Date(sale.createdAt).toLocaleDateString('vi-VN')}
@@ -2325,122 +2349,12 @@ function Admin() {
 
       {/* Order Detail Modal */}
       {showOrderModal && selectedOrder && (
-        <div className="modal-overlay" onClick={() => setShowOrderModal(false)}>
-          <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Chi tiết đơn hàng #{selectedOrder.orderId}</h2>
-              <button className="close-btn" onClick={() => setShowOrderModal(false)}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6 6 18"></path>
-                  <path d="m6 6 12 12"></path>
-                </svg>
-              </button>
-            </div>
-            <div className="order-modal-content">
-              {/* Order Info */}
-              <div className="order-info-grid">
-                <div className="info-section">
-                  <h4>Thông tin đơn hàng</h4>
-                  <p><strong>Mã đơn:</strong> {selectedOrder.orderId}</p>
-                  <p><strong>Ngày đặt:</strong> {formatDate(selectedOrder.orderDate, true)}</p>
-                  <p><strong>Trạng thái:</strong> 
-                    <select 
-                      value={selectedOrder.status}
-                      onChange={(e) => handleUpdateOrderStatus(selectedOrder.orderId, e.target.value)}
-                      className="status-select"
-                    >
-                      <option value="pending">Chờ xác nhận</option>
-                      <option value="confirmed">Đã xác nhận</option>
-                      <option value="shipping">Đang giao hàng</option>
-                      <option value="delivered">Đã giao hàng</option>
-                      <option value="cancelled">Đã hủy</option>
-                    </select>
-                  </p>
-                </div>
-                <div className="info-section">
-                  <h4>Khách hàng</h4>
-                  <p><strong>Họ tên:</strong> {selectedOrder.shippingInfo?.fullName}</p>
-                  <p><strong>SĐT:</strong> {selectedOrder.shippingInfo?.phone}</p>
-                  <p><strong>Email:</strong> {selectedOrder.shippingInfo?.email}</p>
-                </div>
-                <div className="info-section">
-                  <h4>Địa chỉ giao hàng</h4>
-                  <p>{selectedOrder.shippingInfo?.address}</p>
-                  <p>{selectedOrder.shippingInfo?.ward}, {selectedOrder.shippingInfo?.district}</p>
-                  <p>{selectedOrder.shippingInfo?.city}</p>
-                  {selectedOrder.shippingInfo?.note && <p><em>Ghi chú: {selectedOrder.shippingInfo.note}</em></p>}
-                </div>
-                <div className="info-section">
-                  <h4>Thanh toán</h4>
-                  <p><strong>Phương thức:</strong> {getPaymentMethodName(selectedOrder.paymentMethod)}</p>
-                  <p><strong>Trạng thái:</strong> 
-                    <select 
-                      value={selectedOrder.paymentStatus}
-                      onChange={(e) => handleUpdatePaymentStatus(selectedOrder.orderId, e.target.value)}
-                      className="status-select"
-                    >
-                      <option value="pending">Chưa thanh toán</option>
-                      <option value="completed">Đã thanh toán</option>
-                    </select>
-                  </p>
-                </div>
-              </div>
-
-              {/* Order Items */}
-              <div className="order-items-section">
-                <h4>Sản phẩm đặt hàng</h4>
-                <table className="order-items-table">
-                  <thead>
-                    <tr>
-                      <th>Sản phẩm</th>
-                      <th>Đơn giá</th>
-                      <th>SL</th>
-                      <th>Thành tiền</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedOrder.items?.map((item, idx) => (
-                      <tr key={idx}>
-                        <td className="item-cell">
-                          <img src={item.image} alt={item.name} />
-                          <div>
-                            <span className="item-name">{item.name}</span>
-                            {item.size && <span className="item-variant">Size: {item.size}</span>}
-                          </div>
-                        </td>
-                        <td>{formatPrice(item.price)}</td>
-                        <td>{item.quantity}</td>
-                        <td>{formatPrice(item.price * item.quantity)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Order Total */}
-              <div className="order-total-section">
-                <div className="total-row">
-                  <span>Tạm tính:</span>
-                  <span>{formatPrice(selectedOrder.subtotal)}</span>
-                </div>
-                <div className="total-row">
-                  <span>Phí vận chuyển:</span>
-                  <span>{selectedOrder.shipping === 0 ? 'Miễn phí' : formatPrice(selectedOrder.shipping)}</span>
-                </div>
-                {selectedOrder.discount > 0 && (
-                  <div className="total-row discount">
-                    <span>Giảm giá:</span>
-                    <span>-{formatPrice(selectedOrder.discount)}</span>
-                  </div>
-                )}
-                <div className="total-row grand-total">
-                  <span>Tổng cộng:</span>
-                  <span>{formatPrice(selectedOrder.total)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <OrderDetailModal 
+          order={selectedOrder}
+          onClose={() => setShowOrderModal(false)}
+          onStatusChange={handleUpdateOrderStatus}
+          onPaymentStatusChange={handleUpdatePaymentStatus}
+        />
       )}
     </div>
   );

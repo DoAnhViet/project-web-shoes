@@ -1,40 +1,118 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { ordersApi } from '../api/api';
 import './Orders.css';
 
 function Orders() {
+    const { user } = useAuth();
     const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(null);
     const { addNotification } = useNotification();
 
-    const loadStoredOrders = () => {
+    const normalizeOrder = (order) => ({
+        id: order.id || order.orderId,
+        orderId: order.id || order.orderId,
+        orderCode: order.orderCode || order.code || `#${order.id || order.orderId}`,
+        status: order.status || 'pending',
+        paymentMethod: order.paymentMethod || 'cod',
+        paymentStatus: order.paymentStatus || 'pending',
+        subtotal: Number(order.subtotal || order.total || 0),
+        shipping: Number(order.shipping || order.shippingFee || 0),
+        shippingFee: Number(order.shippingFee || order.shipping || 0),
+        discount: Number(order.discount || 0),
+        total: Number(order.total || 0),
+        createdAt: order.createdAt || order.orderDate || order.date,
+        email: order.email || order.customerEmail,
+        fullName: order.fullName || order.customerName || order.customerInfo?.fullName,
+        phone: order.phone || order.customerPhone || order.customerInfo?.phone,
+        address: order.address || order.shippingInfo?.address || order.customerInfo?.address,
+        city: order.city || order.shippingInfo?.city,
+        district: order.district || order.shippingInfo?.district,
+        ward: order.ward || order.shippingInfo?.ward,
+        note: order.note || order.shippingInfo?.note,
+        items: Array.isArray(order.items)
+            ? order.items.map(item => ({
+                productId: item.productId || item.id,
+                name: item.productName || item.name,
+                image: item.productImage || item.imageUrl || item.image,
+                size: item.size,
+                color: item.color,
+                price: Number(item.price || 0),
+                quantity: Number(item.quantity || item.qty || 0),
+                lineTotal: Number(item.lineTotal || item.price * item.quantity || 0)
+              }))
+            : []
+    });
+
+    const getStoredOrders = () => {
         try {
             const savedOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-            // Sort by date (newest first)
-            const sortedOrders = [...savedOrders].sort((a, b) => {
-                const dateA = new Date(a.orderDate || a.createdAt || a.date || 0);
-                const dateB = new Date(b.orderDate || b.createdAt || b.date || 0);
-                return dateB - dateA; // Newest first
+            const filteredOrders = savedOrders.filter(order => {
+                if (!user) return false;
+                return String(order.userId) === String(user.id)
+                    || String(order.email) === String(user.email)
+                    || String(order.orderUserId) === String(user.id);
             });
-            setOrders(sortedOrders);
+
+            return [...filteredOrders]
+                .map(normalizeOrder)
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         } catch (error) {
             console.error('Error loading orders from localStorage:', error);
-            setOrders([]);
+            return [];
+        }
+    };
+
+    const loadStoredOrders = () => {
+        setOrders(getStoredOrders());
+    };
+
+    const loadOrdersFromApi = async () => {
+        if (!user?.id) {
+            loadStoredOrders();
+            setLoading(false);
+            return;
+        }
+
+        try {
+            setLoadError(null);
+            setLoading(true);
+            const response = await ordersApi.getByUser(user.id);
+            const apiOrders = response.data?.items || [];
+
+            if (apiOrders.length === 0) {
+                const localOrders = getStoredOrders();
+                if (localOrders.length > 0) {
+                    setOrders(localOrders);
+                    setLoading(false);
+                    return;
+                }
+            }
+
+            setOrders(apiOrders.map(normalizeOrder));
+        } catch (error) {
+            console.error('Error loading orders from API:', error);
+            setLoadError('Không thể tải đơn hàng từ server. Hiển thị dữ liệu cục bộ.');
+            loadStoredOrders();
+        } finally {
+            setLoading(false);
         }
     };
 
     useEffect(() => {
-        loadStoredOrders();
+        loadOrdersFromApi();
 
         const handleStorage = (event) => {
             if (event.key === 'orders' || event.key === 'lastOrderSync') {
-                loadStoredOrders();
+                loadOrdersFromApi();
             }
         };
 
         const handleFocus = () => {
-            loadStoredOrders();
+            loadOrdersFromApi();
         };
 
         window.addEventListener('storage', handleStorage);
@@ -44,7 +122,7 @@ function Orders() {
             window.removeEventListener('storage', handleStorage);
             window.removeEventListener('focus', handleFocus);
         };
-    }, []);
+    }, [user]);
 
     const formatPrice = (price) => {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
@@ -114,6 +192,16 @@ function Orders() {
         return statusMap[status] || { label: status, color: '#6b7280' };
     };
 
+    if (loading) {
+        return (
+            <div className="orders-container">
+                <div className="orders-empty">
+                    <h2>Đang tải đơn hàng...</h2>
+                </div>
+            </div>
+        );
+    }
+
     if (orders.length === 0) {
         return (
             <div className="orders-container">
@@ -145,24 +233,32 @@ function Orders() {
                 </div>
                 <h1>📋 Lịch sử đơn hàng</h1>
                 <p className="page-subtitle">({orders.length} đơn hàng)</p>
+                {loadError && <div className="orders-error">{loadError}</div>}
             </header>
 
             <div className="orders-list">
                 {orders.map((order) => {
                     const statusInfo = getStatusBadge(order.status);
-                    const orderId = order.orderId || order.id;
-                    const orderDate = order.orderDate ? new Date(order.orderDate).toLocaleDateString('vi-VN') : order.date;
-                    const customerInfo = order.shippingInfo || order.customerInfo || {};
+                    const orderId = order.id;
+                    const orderDate = order.createdAt ? new Date(order.createdAt).toLocaleDateString('vi-VN') : '';
+                    const customerInfo = {
+                        fullName: order.fullName,
+                        address: order.address,
+                        phone: order.phone,
+                        ward: order.ward,
+                        district: order.district,
+                        city: order.city,
+                    };
                     const items = order.items || [];
-                    const total = order.total || order.totalPrice || 0;
+                    const total = order.total || 0;
                     const subtotal = order.subtotal || total;
-                    const shipping = order.shipping || 0;
+                    const shipping = order.shippingFee || 0;
                     
                     return (
                         <div key={orderId} className="order-card">
                             <div className="order-header">
                                 <div className="order-info">
-                                    <h3>Đơn hàng #{orderId}</h3>
+                                    <h3>Đơn hàng {order.orderCode || `#${orderId}`}</h3>
                                     <p className="order-date">{orderDate}</p>
                                 </div>
                                 <div className="order-meta">

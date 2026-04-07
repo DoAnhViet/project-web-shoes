@@ -41,5 +41,11 @@ namespace WebBanGiay.API.Models
         /// discount is percentage (5 = 5%)
         /// </summary>
         public string? BulkDiscountRules { get; set; }
+
+        /// <summary>
+        /// Navigation property for sales this product is part of
+        /// </summary>
+        [JsonIgnore]
+        public ICollection<SaleProduct> SaleProducts { get; set; } = new List<SaleProduct>();
     }
 }

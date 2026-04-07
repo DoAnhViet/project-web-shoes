@@ -18,7 +18,8 @@ function Wishlist() {
     addToCart({
       ...product,
       size: '40', // Default size
-      color: 'Đen' // Default color
+      color: 'Đen', // Default color
+      saleDiscount: product.saleDiscount || 0
     }, 1);
   };
 

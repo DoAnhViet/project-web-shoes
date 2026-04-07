@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WebBanGiay.API.Data;
 
@@ -11,9 +12,11 @@ using WebBanGiay.API.Data;
 namespace WebBanGiay.API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260407161445_AddPaymentSystem")]
+    partial class AddPaymentSystem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -185,7 +188,7 @@ namespace WebBanGiay.API.Migrations
                         {
                             Id = 1,
                             Code = "WELCOME10",
-                            CreatedAt = new DateTime(2026, 4, 8, 0, 18, 42, 395, DateTimeKind.Local).AddTicks(8950),
+                            CreatedAt = new DateTime(2026, 4, 7, 23, 14, 44, 768, DateTimeKind.Local).AddTicks(3830),
                             Description = "Giảm 10% cho đơn hàng đầu tiên",
                             DiscountType = "percent",
                             DiscountValue = 10m,
@@ -198,7 +201,7 @@ namespace WebBanGiay.API.Migrations
                         {
                             Id = 2,
                             Code = "SAVE50K",
-                            CreatedAt = new DateTime(2026, 4, 8, 0, 18, 42, 409, DateTimeKind.Local).AddTicks(9180),
+                            CreatedAt = new DateTime(2026, 4, 7, 23, 14, 44, 784, DateTimeKind.Local).AddTicks(1010),
                             Description = "Giảm 50.000đ cho đơn từ 500.000đ",
                             DiscountType = "fixed",
                             DiscountValue = 50000m,
@@ -211,7 +214,7 @@ namespace WebBanGiay.API.Migrations
                         {
                             Id = 3,
                             Code = "FREESHIP",
-                            CreatedAt = new DateTime(2026, 4, 8, 0, 18, 42, 409, DateTimeKind.Local).AddTicks(9190),
+                            CreatedAt = new DateTime(2026, 4, 7, 23, 14, 44, 784, DateTimeKind.Local).AddTicks(1030),
                             Description = "Miễn phí ship cho đơn từ 300.000đ",
                             DiscountType = "fixed",
                             DiscountValue = 30000m,
@@ -498,9 +501,6 @@ namespace WebBanGiay.API.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<int>("DiscountPercent")
-                        .HasColumnType("int");
-
                     b.Property<string>("ImageUrl")
                         .IsRequired()
                         .HasColumnType("longtext");
@@ -537,9 +537,8 @@ namespace WebBanGiay.API.Migrations
                             BulkDiscountRules = "[{\"minQty\":2,\"discount\":5},{\"minQty\":5,\"discount\":10}]",
                             CategoryId = 1,
                             Color = "Đen",
-                            CreatedAt = new DateTime(2026, 4, 7, 17, 18, 42, 410, DateTimeKind.Utc).AddTicks(240),
+                            CreatedAt = new DateTime(2026, 4, 7, 16, 14, 44, 784, DateTimeKind.Utc).AddTicks(2380),
                             Description = "Giày thể thao cao cấp Nike Air Max 270",
-                            DiscountPercent = 0,
                             ImageUrl = "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500",
                             Name = "Nike Air Max 270",
                             Price = 3200000m,
@@ -555,9 +554,8 @@ namespace WebBanGiay.API.Migrations
                             BulkDiscountRules = "[{\"minQty\":3,\"discount\":8},{\"minQty\":6,\"discount\":15}]",
                             CategoryId = 1,
                             Color = "Trắng",
-                            CreatedAt = new DateTime(2026, 4, 7, 17, 18, 42, 410, DateTimeKind.Utc).AddTicks(1690),
+                            CreatedAt = new DateTime(2026, 4, 7, 16, 14, 44, 784, DateTimeKind.Utc).AddTicks(3930),
                             Description = "Giày chạy bộ Adidas Ultraboost",
-                            DiscountPercent = 0,
                             ImageUrl = "https://images.unsplash.com/photo-1608231387042-66d1773070a5?w=500",
                             Name = "Adidas Ultraboost",
                             Price = 4500000m,
@@ -572,9 +570,8 @@ namespace WebBanGiay.API.Migrations
                             Brand = "Clarks",
                             CategoryId = 2,
                             Color = "Nâu",
-                            CreatedAt = new DateTime(2026, 4, 7, 17, 18, 42, 410, DateTimeKind.Utc).AddTicks(1690),
+                            CreatedAt = new DateTime(2026, 4, 7, 16, 14, 44, 784, DateTimeKind.Utc).AddTicks(3930),
                             Description = "Giày da Oxford cao cấp cho doanh nhân",
-                            DiscountPercent = 0,
                             ImageUrl = "https://images.unsplash.com/photo-1614252369475-531eba835eb1?w=500",
                             Name = "Giày da Oxford",
                             Price = 2800000m,

@@ -9,6 +9,7 @@ using WebBanGiay.API.Repositories.Implementations;
 using WebBanGiay.API.Observers;
 using WebBanGiay.API.Observers.Implementations;
 using WebBanGiay.API.Services;
+using WebBanGiay.API.Services.Payment;
 using WebBanGiay.API.Middleware;
 using DotNetEnv;
 
@@ -128,6 +129,9 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 // Register Auth Services
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+
+// Register Payment Factory Pattern
+builder.Services.AddScoped<IPaymentProcessorFactory, PaymentProcessorFactory>();
 
 // Register Logger Service as Singleton
 builder.Services.AddSingleton<ILoggerService, LoggerService>();

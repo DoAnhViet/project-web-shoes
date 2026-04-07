@@ -40,7 +40,9 @@ export const productsApi = {
   getById: (id) => api.get(`/products/${id}`),
   create: (data) => api.post('/products', data),
   update: (id, data) => api.put(`/products/${id}`, data),
-  delete: (id) => api.delete(`/products/${id}`)
+  delete: (id) => api.delete(`/products/${id}`),
+  updateDiscount: (id, discountPercent) => api.patch(`/products/${id}/discount`, { discountPercent }),
+  batchUpdateDiscount: (productIds, discountPercent) => api.patch('/products/batch-discount', { productIds, discountPercent })
 };
 
 export const categoriesApi = {
@@ -63,6 +65,7 @@ export const reviewsApi = {
 
 export const ordersApi = {
   getAll: (params) => api.get('/orders', { params }),
+  getMy: (email, params) => api.get('/orders/my', { params: { email, ...params } }),
   getById: (id) => api.get(`/orders/${id}`),
   getByCode: (orderCode) => api.get(`/orders/code/${orderCode}`),
   create: (data) => api.post('/orders', data),

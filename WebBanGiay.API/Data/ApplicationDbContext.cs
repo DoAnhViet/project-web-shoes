@@ -21,6 +21,7 @@ namespace WebBanGiay.API.Data
         public DbSet<Coupon> Coupons { get; set; }
         public DbSet<UserPoints> UserPoints { get; set; }
         public DbSet<PointsTransaction> PointsTransactions { get; set; }
+        public DbSet<Payment> Payments { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -67,6 +68,20 @@ namespace WebBanGiay.API.Data
                 .HasIndex(c => c.SessionId);
             modelBuilder.Entity<Cart>()
                 .HasIndex(c => c.UserId);
+
+            // Payment -> Order (Many-to-One)
+            modelBuilder.Entity<Payment>()
+                .HasOne(p => p.Order)
+                .WithMany()
+                .HasForeignKey(p => p.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Payment indexes
+            modelBuilder.Entity<Payment>()
+                .HasIndex(p => p.PaymentCode)
+                .IsUnique();
+            modelBuilder.Entity<Payment>()
+                .HasIndex(p => p.OrderId);
 
             // Seed categories
             modelBuilder.Entity<Category>().HasData(

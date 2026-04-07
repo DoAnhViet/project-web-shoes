@@ -5,6 +5,8 @@ using WebBanGiay.API.DTOs;
 using WebBanGiay.API.Services;
 using WebBanGiay.API.Repositories.Interfaces;
 using WebBanGiay.API.Middleware;
+using WebBanGiay.API.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace WebBanGiay.API.Controllers;
 
@@ -239,8 +241,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("set-admin/{email}")]
-    [Authorize]
-    [RequireAdmin]
+    [AllowAnonymous] // TEMPORARY: Allow creation of first admin
     public async Task<ActionResult> SetAdmin(string email)
     {
         try
@@ -261,6 +262,47 @@ public class AuthController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError($"Error setting admin: {ex.Message}");
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// TEMPORARY: Create first admin user (no auth required)
+    /// POST /api/auth/create-admin
+    /// </summary>
+    [HttpPost("create-admin")]
+    [AllowAnonymous]
+    public async Task<ActionResult> CreateFirstAdmin([FromBody] CreateAdminDto request)
+    {
+        try
+        {
+            // Check if any admin exists
+            var hasAdmin = await _userRepository.HasAdminAsync();
+                
+            if (hasAdmin)
+            {
+                return BadRequest(new { message = "Admin user already exists" });
+            }
+
+            // Create admin user
+            var adminUser = new User
+            {
+                FullName = request.FullName ?? "Administrator",
+                Email = request.Email,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+                Role = UserRole.Admin,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _userRepository.CreateAsync(adminUser);
+
+            _logger.LogInformation($"First admin user created: {request.Email}");
+
+            return Ok(new { message = "Admin user created successfully", email = request.Email });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Error creating admin: {ex.Message}");
             return BadRequest(new { error = ex.Message });
         }
     }

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { ordersApi } from '../api/api';
 import { logger, PaymentService, OrderService, PriceCalculatorService } from '../services';
 import PriceBreakdown from '../components/PriceBreakdown';
 import './Checkout.css';
@@ -25,12 +26,6 @@ function Checkout() {
   });
   
   const [paymentMethod, setPaymentMethod] = useState('cod');
-  const [cardDetails, setCardDetails] = useState({
-    cardNumber: '',
-    cardName: '',
-    expiryDate: '',
-    cvv: ''
-  });
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [errors, setErrors] = useState({});
@@ -214,19 +209,7 @@ function Checkout() {
   };
 
   const validateStep2 = () => {
-    if (paymentMethod === 'card') {
-      const newErrors = {};
-      if (!cardDetails.cardNumber.replace(/\s/g, '').match(/^\d{16}$/)) {
-        newErrors.cardNumber = 'Số thẻ phải có 16 chữ số';
-      }
-      if (!cardDetails.cardName.trim()) newErrors.cardName = 'Vui lòng nhập tên chủ thẻ';
-      if (!cardDetails.expiryDate.match(/^\d{2}\/\d{2}$/)) {
-        newErrors.expiryDate = 'Định dạng MM/YY';
-      }
-      if (!cardDetails.cvv.match(/^\d{3}$/)) newErrors.cvv = 'CVV 3 số';
-      setErrors(newErrors);
-      return Object.keys(newErrors).length === 0;
-    }
+    // All payment methods are valid (COD and Banking don't need validation)
     return true;
   };
 
@@ -261,8 +244,9 @@ function Checkout() {
       
       // Format data for API (CreateOrderDto)
       const apiOrderData = {
+        userId: user?.id || null,
         fullName: formData.fullName,
-        email: formData.email,
+        email: formData.email || user?.email || '',
         phone: formData.phone,
         address: formData.address,
         city: formData.city,
@@ -282,29 +266,16 @@ function Checkout() {
         }))
       };
 
-      // DIRECT API CALL - bypass OrderService for reliability
+      // Create order via API (uses axios with auth token)
       let createdOrder = null;
       let confirmedOrderId = orderId;
-      
+
       try {
         console.log('📦 Sending order to API:', apiOrderData);
-        const response = await fetch('http://localhost:5240/api/orders', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(apiOrderData)
-        });
-        
-        if (response.ok) {
-          createdOrder = await response.json();
-          confirmedOrderId = createdOrder.orderCode || orderId;
-          console.log('✅ Order created in database:', createdOrder);
-        } else {
-          const errorText = await response.text();
-          console.error('❌ API Error:', response.status, errorText);
-          throw new Error(`API Error: ${response.status}`);
-        }
+        const response = await ordersApi.create(apiOrderData);
+        createdOrder = response.data;
+        confirmedOrderId = createdOrder.orderCode || orderId;
+        console.log('✅ Order created in database:', createdOrder);
       } catch (apiError) {
         console.error('❌ Failed to create order via API:', apiError);
         // Continue with local order only
@@ -576,121 +547,43 @@ function Checkout() {
                   </div>
                 </label>
                 
-                <label className={`payment-option ${paymentMethod === 'bank' ? 'selected' : ''}`}>
+                <label className={`payment-option ${paymentMethod === 'banking' ? 'selected' : ''}`}>
                   <input
                     type="radio"
                     name="payment"
-                    value="bank"
-                    checked={paymentMethod === 'bank'}
+                    value="banking"
+                    checked={paymentMethod === 'banking'}
                     onChange={(e) => setPaymentMethod(e.target.value)}
                   />
                   <div className="payment-info">
                     <span className="payment-icon">🏦</span>
                     <div>
-                      <strong>Chuyển khoản ngân hàng</strong>
-                      <p>Chuyển khoản đến tài khoản ngân hàng</p>
-                    </div>
-                  </div>
-                </label>
-
-                <label className={`payment-option ${paymentMethod === 'card' ? 'selected' : ''}`}>
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="card"
-                    checked={paymentMethod === 'card'}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                  />
-                  <div className="payment-info">
-                    <span className="payment-icon">💳</span>
-                    <div>
-                      <strong>Thẻ tín dụng / Ghi nợ</strong>
-                      <p>Visa, Mastercard, JCB</p>
-                    </div>
-                  </div>
-                </label>
-
-                <label className={`payment-option ${paymentMethod === 'momo' ? 'selected' : ''}`}>
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="momo"
-                    checked={paymentMethod === 'momo'}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                  />
-                  <div className="payment-info">
-                    <span className="payment-icon">📱</span>
-                    <div>
-                      <strong>Ví MoMo</strong>
-                      <p>Thanh toán qua ví điện tử MoMo</p>
+                      <strong>Chuyển khoản QR Banking</strong>
+                      <p>DO ANH VIET - 1907 3349 9870 13 - TECHCOMBANK</p>
                     </div>
                   </div>
                 </label>
               </div>
 
-              {/* Card Details */}
-              {paymentMethod === 'card' && (
-                <div className="card-details">
-                  <div className="form-group">
-                    <label>Số thẻ</label>
-                    <input
-                      type="text"
-                      value={cardDetails.cardNumber}
-                      onChange={(e) => setCardDetails({...cardDetails, cardNumber: e.target.value})}
-                      placeholder="1234 5678 9012 3456"
-                      maxLength="19"
-                      className={errors.cardNumber ? 'error' : ''}
-                    />
-                    {errors.cardNumber && <span className="error-text">{errors.cardNumber}</span>}
-                  </div>
-                  <div className="form-group">
-                    <label>Tên chủ thẻ</label>
-                    <input
-                      type="text"
-                      value={cardDetails.cardName}
-                      onChange={(e) => setCardDetails({...cardDetails, cardName: e.target.value})}
-                      placeholder="NGUYEN VAN A"
-                      className={errors.cardName ? 'error' : ''}
-                    />
-                    {errors.cardName && <span className="error-text">{errors.cardName}</span>}
-                  </div>
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Ngày hết hạn</label>
-                      <input
-                        type="text"
-                        value={cardDetails.expiryDate}
-                        onChange={(e) => setCardDetails({...cardDetails, expiryDate: e.target.value})}
-                        placeholder="MM/YY"
-                        maxLength="5"
-                        className={errors.expiryDate ? 'error' : ''}
-                      />
-                      {errors.expiryDate && <span className="error-text">{errors.expiryDate}</span>}
-                    </div>
-                    <div className="form-group">
-                      <label>CVV</label>
-                      <input
-                        type="password"
-                        value={cardDetails.cvv}
-                        onChange={(e) => setCardDetails({...cardDetails, cvv: e.target.value})}
-                        placeholder="•••"
-                        maxLength="3"
-                        className={errors.cvv ? 'error' : ''}
-                      />
-                      {errors.cvv && <span className="error-text">{errors.cvv}</span>}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Bank Transfer Info */}
-              {paymentMethod === 'bank' && (
+              {/* Banking QR Info */}
+              {paymentMethod === 'banking' && (
                 <div className="bank-info">
-                  <h4>Thông tin chuyển khoản:</h4>
-                  <p><strong>Ngân hàng:</strong> Vietcombank</p>
-                  <p><strong>Số tài khoản:</strong> 1234567890</p>
-                  <p><strong>Chủ tài khoản:</strong> KICKS SHOE STORE</p>
-                  <p><strong>Nội dung:</strong> [Mã đơn hàng] - [SĐT]</p>
+                  <h4>📱 Quét mã QR để thanh toán:</h4>
+                  <div style={{textAlign: 'center', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '12px', border: '1px solid #ddd'}}>
+                    <img 
+                      src="/qr-banking.png" 
+                      alt="QR Banking - DO ANH VIET" 
+                      style={{width: '250px', height: 'auto', marginBottom: '15px', borderRadius: '8px'}}
+                    />
+                    <div style={{textAlign: 'left', padding: '15px', backgroundColor: '#fff', borderRadius: '8px', marginTop: '10px'}}>
+                      <p><strong>🏦 Ngân hàng:</strong> TECHCOMBANK</p>
+                      <p><strong>👤 Chủ tài khoản:</strong> DO ANH VIET</p>
+                      <p><strong>💳 Số tài khoản:</strong> 1907 3349 9870 13</p>
+                      <p style={{marginTop: '10px', fontSize: '14px', color: '#28a745', fontWeight: '500'}}>
+                        ✅ Quét mã QR bằng ứng dụng ngân hàng để thanh toán tự động
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -722,10 +615,8 @@ function Checkout() {
                 <h3>Phương thức thanh toán</h3>
                 <div className="review-info">
                   <p>
-                    {paymentMethod === 'cod' && '💵 Thanh toán khi nhận hàng'}
-                    {paymentMethod === 'bank' && '🏦 Chuyển khoản ngân hàng'}
-                    {paymentMethod === 'card' && '💳 Thẻ tín dụng/Ghi nợ'}
-                    {paymentMethod === 'momo' && '📱 Ví MoMo'}
+                    {paymentMethod === 'cod' && '💵 Thanh toán khi nhận hàng (COD)'}
+                    {paymentMethod === 'banking' && '🏦 Chuyển khoản QR Banking'}
                   </p>
                 </div>
                 <button className="btn-edit" onClick={() => setStep(2)}>Sửa</button>

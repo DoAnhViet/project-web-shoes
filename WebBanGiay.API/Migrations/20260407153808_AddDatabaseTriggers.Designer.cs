@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WebBanGiay.API.Data;
 
@@ -11,9 +12,11 @@ using WebBanGiay.API.Data;
 namespace WebBanGiay.API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260407153808_AddDatabaseTriggers")]
+    partial class AddDatabaseTriggers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -185,7 +188,7 @@ namespace WebBanGiay.API.Migrations
                         {
                             Id = 1,
                             Code = "WELCOME10",
-                            CreatedAt = new DateTime(2026, 4, 8, 0, 18, 42, 395, DateTimeKind.Local).AddTicks(8950),
+                            CreatedAt = new DateTime(2026, 4, 7, 22, 38, 8, 416, DateTimeKind.Local).AddTicks(1790),
                             Description = "Giảm 10% cho đơn hàng đầu tiên",
                             DiscountType = "percent",
                             DiscountValue = 10m,
@@ -198,7 +201,7 @@ namespace WebBanGiay.API.Migrations
                         {
                             Id = 2,
                             Code = "SAVE50K",
-                            CreatedAt = new DateTime(2026, 4, 8, 0, 18, 42, 409, DateTimeKind.Local).AddTicks(9180),
+                            CreatedAt = new DateTime(2026, 4, 7, 22, 38, 8, 432, DateTimeKind.Local).AddTicks(9160),
                             Description = "Giảm 50.000đ cho đơn từ 500.000đ",
                             DiscountType = "fixed",
                             DiscountValue = 50000m,
@@ -211,7 +214,7 @@ namespace WebBanGiay.API.Migrations
                         {
                             Id = 3,
                             Code = "FREESHIP",
-                            CreatedAt = new DateTime(2026, 4, 8, 0, 18, 42, 409, DateTimeKind.Local).AddTicks(9190),
+                            CreatedAt = new DateTime(2026, 4, 7, 22, 38, 8, 432, DateTimeKind.Local).AddTicks(9170),
                             Description = "Miễn phí ship cho đơn từ 300.000đ",
                             DiscountType = "fixed",
                             DiscountValue = 30000m,
@@ -373,66 +376,6 @@ namespace WebBanGiay.API.Migrations
                     b.ToTable("OrderItems");
                 });
 
-            modelBuilder.Entity("WebBanGiay.API.Models.Payment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(65,30)");
-
-                    b.Property<string>("BankAccountName")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("BankAccountNumber")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("BankName")
-                        .HasColumnType("longtext");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("Note")
-                        .HasColumnType("longtext");
-
-                    b.Property<int>("OrderId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("PaymentCode")
-                        .IsRequired()
-                        .HasColumnType("varchar(255)");
-
-                    b.Property<string>("PaymentMethod")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("QrCodeUrl")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("TransactionReference")
-                        .HasColumnType("longtext");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OrderId");
-
-                    b.HasIndex("PaymentCode")
-                        .IsUnique();
-
-                    b.ToTable("Payments");
-                });
-
             modelBuilder.Entity("WebBanGiay.API.Models.PointsTransaction", b =>
                 {
                     b.Property<int>("Id")
@@ -498,9 +441,6 @@ namespace WebBanGiay.API.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<int>("DiscountPercent")
-                        .HasColumnType("int");
-
                     b.Property<string>("ImageUrl")
                         .IsRequired()
                         .HasColumnType("longtext");
@@ -537,9 +477,8 @@ namespace WebBanGiay.API.Migrations
                             BulkDiscountRules = "[{\"minQty\":2,\"discount\":5},{\"minQty\":5,\"discount\":10}]",
                             CategoryId = 1,
                             Color = "Đen",
-                            CreatedAt = new DateTime(2026, 4, 7, 17, 18, 42, 410, DateTimeKind.Utc).AddTicks(240),
+                            CreatedAt = new DateTime(2026, 4, 7, 15, 38, 8, 433, DateTimeKind.Utc).AddTicks(340),
                             Description = "Giày thể thao cao cấp Nike Air Max 270",
-                            DiscountPercent = 0,
                             ImageUrl = "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500",
                             Name = "Nike Air Max 270",
                             Price = 3200000m,
@@ -555,9 +494,8 @@ namespace WebBanGiay.API.Migrations
                             BulkDiscountRules = "[{\"minQty\":3,\"discount\":8},{\"minQty\":6,\"discount\":15}]",
                             CategoryId = 1,
                             Color = "Trắng",
-                            CreatedAt = new DateTime(2026, 4, 7, 17, 18, 42, 410, DateTimeKind.Utc).AddTicks(1690),
+                            CreatedAt = new DateTime(2026, 4, 7, 15, 38, 8, 433, DateTimeKind.Utc).AddTicks(1910),
                             Description = "Giày chạy bộ Adidas Ultraboost",
-                            DiscountPercent = 0,
                             ImageUrl = "https://images.unsplash.com/photo-1608231387042-66d1773070a5?w=500",
                             Name = "Adidas Ultraboost",
                             Price = 4500000m,
@@ -572,9 +510,8 @@ namespace WebBanGiay.API.Migrations
                             Brand = "Clarks",
                             CategoryId = 2,
                             Color = "Nâu",
-                            CreatedAt = new DateTime(2026, 4, 7, 17, 18, 42, 410, DateTimeKind.Utc).AddTicks(1690),
+                            CreatedAt = new DateTime(2026, 4, 7, 15, 38, 8, 433, DateTimeKind.Utc).AddTicks(1920),
                             Description = "Giày da Oxford cao cấp cho doanh nhân",
-                            DiscountPercent = 0,
                             ImageUrl = "https://images.unsplash.com/photo-1614252369475-531eba835eb1?w=500",
                             Name = "Giày da Oxford",
                             Price = 2800000m,
@@ -750,17 +687,6 @@ namespace WebBanGiay.API.Migrations
                     b.Navigation("Order");
 
                     b.Navigation("Product");
-                });
-
-            modelBuilder.Entity("WebBanGiay.API.Models.Payment", b =>
-                {
-                    b.HasOne("WebBanGiay.API.Models.Order", "Order")
-                        .WithMany()
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Order");
                 });
 
             modelBuilder.Entity("WebBanGiay.API.Models.Product", b =>

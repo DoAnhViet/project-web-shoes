@@ -6,6 +6,26 @@ import { useWishlist } from '../context/WishlistContext';
 import { useAuth } from '../context/AuthContext';
 import './ProductDetail.css';
 
+// Utility to get sale discount for a product (uses API discountPercent, fallback to localStorage)
+const getSaleDiscount = (product) => {
+  // First check if product has discountPercent from API
+  if (product && product.discountPercent && product.discountPercent > 0) {
+    return { discount: product.discountPercent, name: 'Giảm giá' };
+  }
+  // Fallback to localStorage sales (for backward compatibility)
+  try {
+    const productId = product?.id;
+    if (!productId) return null;
+    const sales = JSON.parse(localStorage.getItem('sales') || '[]');
+    const activeSale = sales.find(sale => 
+      sale.isActive && sale.productIds.includes(String(productId))
+    );
+    return activeSale ? { discount: activeSale.discountPercent, name: activeSale.name } : null;
+  } catch {
+    return null;
+  }
+};
+
 function ProductDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -20,6 +40,21 @@ function ProductDetail() {
     const [error, setError] = useState(null);
     const [addedToCart, setAddedToCart] = useState(false);
     const [validationError, setValidationError] = useState('');
+    
+    // Helper: Get available quantity for selected size
+    const getAvailableForSize = (sizeStr, selectedSz) => {
+        if (!sizeStr || !selectedSz) return 0;
+        const sizes = sizeStr.split(',').map(s => s.trim());
+        for (const sizeItem of sizes) {
+            if (sizeItem.includes(':')) {
+                const [size, qty] = sizeItem.split(':').map(s => s.trim());
+                if (size === selectedSz) return parseInt(qty) || 0;
+            } else if (sizeItem === selectedSz) {
+                return 999; // No limit specified
+            }
+        }
+        return 0;
+    };
     
     // Reviews state
     const [reviews, setReviews] = useState([]);
@@ -129,8 +164,10 @@ function ProductDetail() {
             return;
         }
 
-        if (quantity > product.stock) {
-            setValidationError(`Số lượng tối đa: ${product.stock}`);
+        // Check quantity against selected size availability
+        const maxForSize = getAvailableForSize(product.size, selectedSize);
+        if (quantity > maxForSize) {
+            setValidationError(`Số lượng tối đa cho size ${selectedSize}: ${maxForSize} đôi`);
             return;
         }
 
@@ -149,7 +186,17 @@ function ProductDetail() {
 
     const handleQuantityChange = (value) => {
         const num = parseInt(value) || 1;
-        setQuantity(Math.max(1, Math.min(num, product.stock)));
+        // Get max quantity based on selected size
+        const maxQty = selectedSize 
+            ? getAvailableForSize(product.size, selectedSize) 
+            : product.stock;
+        setQuantity(Math.max(1, Math.min(num, maxQty)));
+    };
+
+    // Reset quantity when size changes
+    const handleSizeChange = (size) => {
+        setSelectedSize(size);
+        setQuantity(1); // Reset quantity
     };
 
     if (loading) {
@@ -208,7 +255,20 @@ function ProductDetail() {
                     </div>
 
                     <div className="product-price-info">
-                        <div className="price-display">{formatPrice(product.price)}</div>
+                        {(() => {
+                            const sale = getSaleDiscount(product);
+                            if (sale) {
+                                const salePrice = product.price * (1 - sale.discount / 100);
+                                return (
+                                    <>
+                                        <div className="sale-badge-detail">🔥 {sale.name} - Giảm {sale.discount}%</div>
+                                        <div className="price-display sale-price">{formatPrice(salePrice)}</div>
+                                        <div className="price-display original-price">{formatPrice(product.price)}</div>
+                                    </>
+                                );
+                            }
+                            return <div className="price-display">{formatPrice(product.price)}</div>;
+                        })()}
                         <div className={`stock-status ${product.stock > 0 ? 'in-stock' : 'out-of-stock'}`}>
                             {product.stock > 0 ? `✓ Còn ${product.stock} sản phẩm` : '✕ Hết hàng'}
                         </div>
@@ -247,11 +307,35 @@ function ProductDetail() {
                             <select
                                 id="size"
                                 value={selectedSize}
-                                onChange={(e) => setSelectedSize(e.target.value)}
+                                onChange={(e) => handleSizeChange(e.target.value)}
                                 className={`size-select ${selectedSize ? 'selected' : ''}`}
                             >
                                 <option value="">Chọn kích cỡ</option>
-                                <option value={product.size}>{product.size}</option>
+                                {(() => {
+                                    // Parse size string: "38:10, 40:1" -> [{size: "38", qty: 10}, {size: "40", qty: 1}]
+                                    const sizeStr = product.size || '';
+                                    const sizes = sizeStr.split(',').map(s => s.trim()).filter(s => s);
+                                    
+                                    return sizes.map((sizeItem, idx) => {
+                                        // Check if format is "size:quantity"
+                                        if (sizeItem.includes(':')) {
+                                            const [size, qty] = sizeItem.split(':').map(s => s.trim());
+                                            const available = parseInt(qty) || 0;
+                                            return (
+                                                <option key={idx} value={size} disabled={available === 0}>
+                                                    {size} ({available} đôi)
+                                                </option>
+                                            );
+                                        } else {
+                                            // Simple size without quantity
+                                            return (
+                                                <option key={idx} value={sizeItem}>
+                                                    {sizeItem}
+                                                </option>
+                                            );
+                                        }
+                                    });
+                                })()}
                             </select>
                             {!selectedSize && <span className="required-notice">*Bắt buộc</span>}
                         </div>
@@ -259,31 +343,47 @@ function ProductDetail() {
                         <div className="quantity-selector">
                             <label htmlFor="quantity">Số lượng:</label>
                             <div className="quantity-control">
-                                <button
-                                    className="qty-btn"
-                                    onClick={() => handleQuantityChange(quantity - 1)}
-                                    disabled={product.stock === 0}
-                                >
-                                    −
-                                </button>
-                                <input
-                                    id="quantity"
-                                    type="number"
-                                    min="1"
-                                    max={product.stock}
-                                    value={quantity}
-                                    onChange={(e) => handleQuantityChange(e.target.value)}
-                                    disabled={product.stock === 0}
-                                    className="quantity-input"
-                                />
-                                <button
-                                    className="qty-btn"
-                                    onClick={() => handleQuantityChange(quantity + 1)}
-                                    disabled={product.stock === 0}
-                                >
-                                    +
-                                </button>
+                                {(() => {
+                                    const maxQty = selectedSize 
+                                        ? getAvailableForSize(product.size, selectedSize) 
+                                        : product.stock;
+                                    const isDisabled = !selectedSize || maxQty === 0;
+                                    
+                                    return (
+                                        <>
+                                            <button
+                                                className="qty-btn"
+                                                onClick={() => handleQuantityChange(quantity - 1)}
+                                                disabled={isDisabled || quantity <= 1}
+                                            >
+                                                −
+                                            </button>
+                                            <input
+                                                id="quantity"
+                                                type="number"
+                                                min="1"
+                                                max={maxQty}
+                                                value={quantity}
+                                                onChange={(e) => handleQuantityChange(e.target.value)}
+                                                disabled={isDisabled}
+                                                className="quantity-input"
+                                            />
+                                            <button
+                                                className="qty-btn"
+                                                onClick={() => handleQuantityChange(quantity + 1)}
+                                                disabled={isDisabled || quantity >= maxQty}
+                                            >
+                                                +
+                                            </button>
+                                        </>
+                                    );
+                                })()}
                             </div>
+                            {selectedSize && (
+                                <span className="stock-hint">
+                                    (Tối đa: {getAvailableForSize(product.size, selectedSize)} đôi)
+                                </span>
+                            )}
                         </div>
                     </div>
 

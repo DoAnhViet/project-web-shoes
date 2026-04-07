@@ -9,7 +9,7 @@
   min-height: 100vh;
   width: 100%;
   max-width: 100vw;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%);
   font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
   overflow-x: hidden;
   position: relative;
@@ -23,9 +23,9 @@
   right: 0;
   bottom: 0;
   background:
-    radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
-    radial-gradient(circle at 40% 40%, rgba(120, 219, 226, 0.3) 0%, transparent 50%);
+    radial-gradient(circle at 20% 80%, rgba(0, 0, 0, 0.02) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(0, 0, 0, 0.03) 0%, transparent 50%),
+    radial-gradient(circle at 40% 40%, rgba(108, 117, 125, 0.05) 0%, transparent 50%);
   pointer-events: none;
   z-index: -1;
 }
@@ -33,10 +33,9 @@
 /* Sidebar */
 .sidebar {
   width: 280px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border-right: 1px solid rgba(255, 255, 255, 0.2);
-  color: #1a1a1a;
+  background: #ffffff;
+  border-right: 1px solid #e9ecef;
+  color: #212529;
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -45,7 +44,7 @@
   height: 100vh;
   z-index: 1000;
   overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
 .sidebar-logo {
@@ -119,7 +118,7 @@
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+  background: linear-gradient(90deg, transparent, rgba(108, 117, 125, 0.1), transparent);
   transition: left 0.5s;
 }
 
@@ -128,16 +127,16 @@
 }
 
 .nav-btn:hover {
-  background: rgba(102, 126, 234, 0.1);
-  color: #667eea;
+  background: rgba(108, 117, 125, 0.1);
+  color: #495057;
   transform: translateX(4px);
-  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.15);
+  box-shadow: 0 4px 20px rgba(108, 117, 125, 0.15);
 }
 
 .nav-btn.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #212529 0%, #495057 100%);
   color: #fff;
-  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 8px 32px rgba(33, 37, 41, 0.3);
   transform: translateX(8px);
 }
 

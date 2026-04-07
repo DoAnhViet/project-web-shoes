@@ -8,16 +8,90 @@ const OrderDetail = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
   const { addNotification } = useNotification();
 
   useEffect(() => {
-    // Load order data on mount
-    const loadOrder = () => {
+    // Load order from API first, then fallback to localStorage
+    const loadOrder = async () => {
+      setLoading(true);
+      try {
+        // Try API first - by code
+        const response = await ordersApi.getByCode(orderId);
+        if (response.data) {
+          // Transform API response to match our UI format
+          const apiOrder = response.data;
+          setOrder({
+            orderId: apiOrder.orderCode || apiOrder.id,
+            id: apiOrder.id,
+            orderCode: apiOrder.orderCode,
+            orderDate: apiOrder.createdAt,
+            shippingInfo: {
+              fullName: apiOrder.fullName,
+              phone: apiOrder.phone,
+              email: apiOrder.email,
+              address: apiOrder.address,
+              city: apiOrder.city || '',
+              district: apiOrder.district || '',
+              ward: apiOrder.ward || '',
+              note: apiOrder.note || '',
+            },
+            items: (apiOrder.items || []).map(item => ({
+              id: item.productId,
+              name: item.productName,
+              imageUrl: item.productImage,
+              image: item.productImage,
+              size: item.size,
+              color: item.color,
+              price: item.price,
+              quantity: item.quantity
+            })),
+            subtotal: apiOrder.subtotal,
+            shippingFee: apiOrder.shippingFee,
+            shipping: apiOrder.shippingFee,
+            discount: apiOrder.discount,
+            total: apiOrder.total,
+            status: apiOrder.status?.toLowerCase() || 'pending',
+            paymentMethod: apiOrder.paymentMethod?.toLowerCase() || 'cod',
+            paymentStatus: apiOrder.paymentStatus || 'pending'
+          });
+          setLoading(false);
+          return;
+        }
+      } catch (apiError) {
+        console.log('API fetch failed, trying localStorage:', apiError);
+      }
+
+      // Fallback to localStorage
       const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-      const found = orders.find(o => o.orderId === orderId);
-      setOrder(found);
+      const found = orders.find(o => o.orderId === orderId || o.orderCode === orderId);
+      setOrder(found || null);
+      setLoading(false);
     };
     loadOrder();
+
+    // Poll for status updates every 10 seconds
+    const interval = setInterval(async () => {
+      try {
+        const response = await ordersApi.getByCode(orderId);
+        if (response.data) {
+          const apiOrder = response.data;
+          setOrder(prev => {
+            if (!prev) return prev;
+            const newStatus = apiOrder.status?.toLowerCase() || prev.status;
+            const newPaymentStatus = apiOrder.paymentStatus || prev.paymentStatus;
+            if (newStatus !== prev.status || newPaymentStatus !== prev.paymentStatus) {
+              return { ...prev, status: newStatus, paymentStatus: newPaymentStatus };
+            }
+            return prev;
+          });
+        }
+      } catch {
+        // Silently ignore polling errors
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, [orderId]);
 
   const handleCancelOrder = async () => {
@@ -26,11 +100,13 @@ const OrderDetail = () => {
     }
 
     try {
-      // Try to cancel via API first
-      await ordersApi.cancel(orderId);
+      // Cancel via API using numeric id
+      if (order?.id) {
+        await ordersApi.cancel(order.id);
+      }
       addNotification('✅ Đơn hàng đã được hủy thành công', 3000);
     } catch (error) {
-      console.error('API cancel failed, updating locally:', error);
+      console.error('API cancel failed:', error);
     }
 
     // Update local storage
@@ -79,9 +155,8 @@ const OrderDetail = () => {
   const getPaymentMethodName = (method) => {
     const methods = {
       cod: 'Thanh toán khi nhận hàng (COD)',
-      bank: 'Chuyển khoản ngân hàng',
-      card: 'Thẻ tín dụng/Ghi nợ',
-      momo: 'Ví MoMo'
+      banking: 'Chuyển khoản QR Banking',
+      bank: 'Chuyển khoản ngân hàng'
     };
     return methods[method] || method;
   };
@@ -103,6 +178,16 @@ const OrderDetail = () => {
       current: index === currentIndex
     }));
   };
+
+  if (loading) {
+    return (
+      <div className="order-detail-container">
+        <div className="loading-state">
+          <p>Đang tải thông tin đơn hàng...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!order) {
     return (
@@ -233,7 +318,7 @@ const OrderDetail = () => {
             <div className="items-list">
               {order.items?.map((item, index) => (
                 <div key={index} className="order-item">
-                  <img src={item.image} alt={item.name} />
+                  <img src={item.imageUrl || item.image} alt={item.name} />
                   <div className="item-info">
                     <p className="item-name">{item.name}</p>
                     {item.size && <p className="item-variant">Size: {item.size}</p>}
@@ -262,7 +347,7 @@ const OrderDetail = () => {
               </div>
               <div className="summary-row">
                 <span>Phí vận chuyển</span>
-                <span>{order.shipping === 0 ? 'Miễn phí' : formatPrice(order.shipping)}</span>
+                <span>{(order.shipping || order.shippingFee) === 0 ? 'Miễn phí' : formatPrice(order.shipping || order.shippingFee)}</span>
               </div>
               {order.discount > 0 && (
                 <div className="summary-row discount">

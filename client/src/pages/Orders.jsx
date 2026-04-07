@@ -1,43 +1,103 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { ordersApi } from '../api/api';
 import './Orders.css';
 
 function Orders() {
     const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const { user } = useAuth();
     const { addNotification } = useNotification();
 
+    // Load orders from API and localStorage
     useEffect(() => {
-        const savedOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-        setOrders(savedOrders.reverse()); // Show newest first
-    }, []);
+        const loadOrders = async () => {
+            setLoading(true);
+            try {
+                // Try to load from API first (for user's orders by email)
+                if (user?.email) {
+                    const response = await ordersApi.getMy(user.email);
+                    const apiOrders = response.data?.items || [];
+                    
+                    // Transform API orders to match our format
+                    const transformedOrders = apiOrders.map(order => ({
+                        orderId: order.orderCode || order.id,
+                        id: order.id,
+                        orderCode: order.orderCode,
+                        orderDate: order.createdAt,
+                        shippingInfo: {
+                            fullName: order.fullName,
+                            phone: order.phone,
+                            address: order.address,
+                            city: order.city,
+                            district: order.district
+                        },
+                        items: (order.items || []).map(item => ({
+                            name: item.productName,
+                            imageUrl: item.productImage,
+                            image: item.productImage,
+                            size: item.size,
+                            color: item.color,
+                            price: item.price,
+                            quantity: item.quantity,
+                            brand: item.brand
+                        })),
+                        subtotal: order.subtotal,
+                        shipping: order.shippingFee,
+                        discount: order.discount,
+                        total: order.total,
+                        status: order.status,
+                        paymentMethod: order.paymentMethod,
+                        paymentStatus: order.paymentStatus
+                    }));
+                    
+                    setOrders(transformedOrders);
+                    setLoading(false);
+                    return;
+                }
+            } catch (error) {
+                console.log('API fetch failed, falling back to localStorage:', error);
+            }
+            
+            // Fallback to localStorage
+            const savedOrders = JSON.parse(localStorage.getItem('orders') || '[]');
+            setOrders([...savedOrders].reverse());
+            setLoading(false);
+        };
+        
+        loadOrders();
+    }, [user?.email]);
 
     const formatPrice = (price) => {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
     };
 
-    const handleCancelOrder = async (orderId) => {
+    const handleCancelOrder = async (order) => {
         if (!window.confirm('Bạn có chắc muốn hủy đơn hàng này?')) {
             return;
         }
 
         let hasApiError = false;
         try {
-            // Try to cancel via API first
-            await ordersApi.cancel(orderId);
+            // Cancel via API using numeric id
+            if (order.id) {
+                await ordersApi.cancel(order.id);
+            }
         } catch (error) {
             console.error('API cancel failed, updating locally:', error);
             hasApiError = true;
         }
 
-        // Update local storage
-        const updatedOrders = orders.map(order => {
-            const currentOrderId = order.orderId || order.id;
+        // Update local state
+        const orderId = order.orderId || order.id;
+        const updatedOrders = orders.map(o => {
+            const currentOrderId = o.orderId || o.id;
             if (currentOrderId === orderId) {
-                return { ...order, status: 'cancelled' };
+                return { ...o, status: 'cancelled' };
             }
-            return order;
+            return o;
         });
         setOrders(updatedOrders);
         localStorage.setItem('orders', JSON.stringify(updatedOrders.reverse()));
@@ -64,10 +124,8 @@ function Orders() {
     const getPaymentMethodLabel = (method) => {
         const methodMap = {
             'cod': '💵 COD',
-            'bank': '🏦 Chuyển khoản',
-            'card': '💳 Thẻ tín dụng',
-            'momo': '📱 MoMo',
-            'ewallet': '📱 Ví điện tử'
+            'banking': '🏦 Chuyển khoản',
+            'bank': '🏦 Chuyển khoản'
         };
         return methodMap[method] || method;
     };
@@ -79,6 +137,16 @@ function Orders() {
         };
         return statusMap[status] || { label: status, color: '#6b7280' };
     };
+
+    if (loading) {
+        return (
+            <div className="orders-container">
+                <div className="orders-loading">
+                    <p>Đang tải đơn hàng...</p>
+                </div>
+            </div>
+        );
+    }
 
     if (orders.length === 0) {
         return (
@@ -216,9 +284,9 @@ function Orders() {
                                     Xem chi tiết →
                                 </Link>
                                 {order.status === 'pending' && (
-                                    <button 
+                                    <button
                                         className="btn-cancel-order"
-                                        onClick={() => handleCancelOrder(orderId)}
+                                        onClick={() => handleCancelOrder(order)}
                                     >
                                         🚫 Hủy đơn hàng
                                     </button>

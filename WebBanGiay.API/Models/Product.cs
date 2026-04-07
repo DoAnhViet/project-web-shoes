@@ -41,5 +41,10 @@ namespace WebBanGiay.API.Models
         /// discount is percentage (5 = 5%)
         /// </summary>
         public string? BulkDiscountRules { get; set; }
+
+        /// <summary>
+        /// Sale discount percentage (0-100). 0 means no sale.
+        /// </summary>
+        public int DiscountPercent { get; set; } = 0;
     }
 }

@@ -75,6 +75,51 @@ namespace WebBanGiay.API.Controllers
         }
 
         /// <summary>
+        /// Get orders for a specific customer by email (no admin required)
+        /// GET /api/orders/my?email=user@example.com
+        /// </summary>
+        [HttpGet("my")]
+        public async Task<ActionResult<PagedResult<OrderResponseDto>>> GetMyOrders(
+            [FromQuery] string email,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 100)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(email))
+                {
+                    return BadRequest(new { message = "Email is required" });
+                }
+
+                var query = _context.Orders
+                    .Include(o => o.OrderItems)
+                    .Where(o => o.Email == email);
+
+                var totalItems = await query.CountAsync();
+                var orders = await query
+                    .OrderByDescending(o => o.CreatedAt)
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync();
+
+                var orderDtos = orders.Select(MapToResponseDto).ToList();
+
+                return Ok(new PagedResult<OrderResponseDto>
+                {
+                    Items = orderDtos,
+                    TotalCount = totalItems,
+                    PageNumber = pageNumber,
+                    PageSize = pageSize
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting orders for email {Email}", email);
+                return StatusCode(500, new { message = "Error getting orders" });
+            }
+        }
+
+        /// <summary>
         /// Get order by ID
         /// GET /api/orders/5
         /// </summary>
@@ -233,6 +278,15 @@ namespace WebBanGiay.API.Controllers
                 if (!validStatuses.Contains(dto.Status.ToLower()))
                 {
                     return BadRequest(new { message = "Invalid status. Valid values: pending, confirmed, shipping, delivered, cancelled" });
+                }
+
+                // Validate status transition - prevent going backwards
+                var currentStatus = order.Status.ToLower();
+                var newStatus = dto.Status.ToLower();
+                
+                if (!IsValidStatusTransition(currentStatus, newStatus))
+                {
+                    return BadRequest(new { message = $"Cannot change status from '{currentStatus}' to '{newStatus}'. Invalid transition." });
                 }
 
                 order.Status = dto.Status.ToLower();
@@ -402,6 +456,49 @@ namespace WebBanGiay.API.Controllers
                     LineTotal = i.LineTotal
                 }).ToList()
             };
+        }
+
+        /// <summary>
+        /// Validate if status transition is allowed
+        /// Prevents going backwards in the order lifecycle
+        /// </summary>
+        private static bool IsValidStatusTransition(string currentStatus, string newStatus)
+        {
+            // Status progression: pending -> confirmed -> shipping -> delivered
+            // cancelled can be reached from pending, confirmed, or shipping but not from delivered
+            
+            var statusOrder = new Dictionary<string, int>
+            {
+                ["pending"] = 1,
+                ["confirmed"] = 2, 
+                ["shipping"] = 3,
+                ["delivered"] = 4,
+                ["cancelled"] = 99 // Special status
+            };
+
+            // Same status is allowed (idempotent)
+            if (currentStatus == newStatus)
+                return true;
+
+            // Cannot change from delivered to anything else
+            if (currentStatus == "delivered")
+                return false;
+
+            // Cannot change from cancelled to anything else  
+            if (currentStatus == "cancelled")
+                return false;
+
+            // Can move to cancelled from pending, confirmed, or shipping
+            if (newStatus == "cancelled" && (currentStatus == "pending" || currentStatus == "confirmed" || currentStatus == "shipping"))
+                return true;
+
+            // For normal progression, can only move forward
+            if (statusOrder.ContainsKey(currentStatus) && statusOrder.ContainsKey(newStatus))
+            {
+                return statusOrder[newStatus] > statusOrder[currentStatus] && newStatus != "cancelled";
+            }
+
+            return false;
         }
     }
 }

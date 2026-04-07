@@ -61,4 +61,14 @@ public class UserRepository : IUserRepository
     {
         return await _context.Users.AnyAsync(u => u.Email == email);
     }
+
+    public async Task<bool> HasAdminAsync()
+    {
+        return await _context.Users.AnyAsync(u => u.Role == UserRole.Admin);
+    }
+
+    public async Task<User?> GetAdminAsync()
+    {
+        return await _context.Users.FirstOrDefaultAsync(u => u.Role == UserRole.Admin);
+    }
 }

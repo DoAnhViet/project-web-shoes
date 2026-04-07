@@ -1,9 +1,27 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { productsApi } from '../api/api';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import './Products.css';
+
+// Utility to get sale discount for a product
+const getSaleDiscount = (product) => {
+  if (product && product.discountPercent && product.discountPercent > 0) {
+    return product.discountPercent;
+  }
+  try {
+    const productId = product?.id;
+    if (!productId) return 0;
+    const sales = JSON.parse(localStorage.getItem('sales') || '[]');
+    const activeSale = sales.find(sale =>
+      sale.isActive && sale.productIds.includes(String(productId))
+    );
+    return activeSale ? activeSale.discountPercent : 0;
+  } catch {
+    return 0;
+  }
+};
 
 function Products() {
   const { category } = useParams();
@@ -26,6 +44,44 @@ function Products() {
     color: ''
   });
   const [showFilters, setShowFilters] = useState(false);
+
+  const applyFiltersAndSort = useCallback((productsData) => {
+    let filtered = [...productsData];
+
+    // Filter by price range
+    if (filters.priceMin) {
+      filtered = filtered.filter(p => p.price >= parseFloat(filters.priceMin));
+    }
+    if (filters.priceMax) {
+      filtered = filtered.filter(p => p.price <= parseFloat(filters.priceMax));
+    }
+
+    // Filter by brand
+    if (filters.brand) {
+      filtered = filtered.filter(p => p.brand?.toLowerCase() === filters.brand.toLowerCase());
+    }
+
+    // Filter by size (if product has size field)
+    if (filters.size) {
+      filtered = filtered.filter(p => p.size?.includes(filters.size));
+    }
+
+    // Filter by color (if product has color field)
+    if (filters.color) {
+      filtered = filtered.filter(p => p.color?.toLowerCase().includes(filters.color.toLowerCase()));
+    }
+
+    // Sort products
+    if (sortBy === 'price-low') {
+      filtered.sort((a, b) => a.price - b.price);
+    } else if (sortBy === 'price-high') {
+      filtered.sort((a, b) => b.price - a.price);
+    } else if (sortBy === 'name') {
+      filtered.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    setProducts(filtered);
+  }, [filters, sortBy]);
 
   const categoryNames = {
     'men': 'Giày Nam',
@@ -72,7 +128,6 @@ function Products() {
         }
         
         setAllProducts(productsData); // Store all products
-        applyFiltersAndSort(productsData); // Apply filters
       } catch (error) {
         console.error('Error fetching products:', error);
       } finally {
@@ -84,48 +139,8 @@ function Products() {
 
   // Apply filters and sorting whenever filters or sortBy changes
   useEffect(() => {
-    if (allProducts.length > 0) {
-      applyFiltersAndSort(allProducts);
-    }
-  }, [filters, sortBy]);
-
-  const applyFiltersAndSort = (productsData) => {
-    let filtered = [...productsData];
-
-    // Filter by price range
-    if (filters.priceMin) {
-      filtered = filtered.filter(p => p.price >= parseFloat(filters.priceMin));
-    }
-    if (filters.priceMax) {
-      filtered = filtered.filter(p => p.price <= parseFloat(filters.priceMax));
-    }
-
-    // Filter by brand
-    if (filters.brand) {
-      filtered = filtered.filter(p => p.brand?.toLowerCase() === filters.brand.toLowerCase());
-    }
-
-    // Filter by size (if product has size field)
-    if (filters.size) {
-      filtered = filtered.filter(p => p.size?.includes(filters.size));
-    }
-
-    // Filter by color (if product has color field)
-    if (filters.color) {
-      filtered = filtered.filter(p => p.color?.toLowerCase().includes(filters.color.toLowerCase()));
-    }
-
-    // Sort products
-    if (sortBy === 'price-low') {
-      filtered.sort((a, b) => a.price - b.price);
-    } else if (sortBy === 'price-high') {
-      filtered.sort((a, b) => b.price - a.price);
-    } else if (sortBy === 'name') {
-      filtered.sort((a, b) => a.name.localeCompare(b.name));
-    }
-
-    setProducts(filtered);
-  };
+    applyFiltersAndSort(allProducts);
+  }, [allProducts, applyFiltersAndSort]);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -285,14 +300,18 @@ function Products() {
         </div>
       ) : (
         <div className="products-grid">
-          {products.map(product => (
-            <Link 
-              key={product.id} 
-              to={`/product/${product.id}`} 
+          {products.map(product => {
+            const saleDiscount = getSaleDiscount(product);
+            const salePrice = saleDiscount > 0 ? product.price * (1 - saleDiscount / 100) : null;
+
+            return (
+            <Link
+              key={product.id}
+              to={`/product/${product.id}`}
               className="product-card"
             >
-              {category === 'sale' && (
-                <span className="sale-badge">SALE</span>
+              {saleDiscount > 0 && (
+                <span className="sale-badge">-{saleDiscount}%</span>
               )}
               <div className="product-image">
                 <img src={product.imageUrl} alt={product.name} />
@@ -300,20 +319,28 @@ function Products() {
               <div className="product-info">
                 <span className="product-brand">{product.brand?.toUpperCase() || 'BRAND'}</span>
                 <h3 className="product-name">{product.name}</h3>
-                <p className="product-price">{formatPrice(product.price)}</p>
+                {salePrice ? (
+                  <div className="product-price-wrapper">
+                    <p className="product-price sale-price">{formatPrice(salePrice)}</p>
+                    <p className="product-price original-price" style={{textDecoration: 'line-through', color: '#999', fontSize: '0.85em'}}>{formatPrice(product.price)}</p>
+                  </div>
+                ) : (
+                  <p className="product-price">{formatPrice(product.price)}</p>
+                )}
                 <div className="product-meta">
                   <span className="product-size">Size: {product.size}</span>
                   <span className="product-color">{product.color}</span>
                 </div>
               </div>
-              <button 
+              <button
                 className="add-to-cart-btn"
                 onClick={(e) => handleAddToCart(product, e)}
               >
                 Thêm vào giỏ
               </button>
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

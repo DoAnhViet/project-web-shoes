@@ -5,6 +5,26 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import './Home.css';
 
+// Utility to get sale discount for a product (uses API discountPercent, fallback to localStorage)
+const getSaleDiscount = (product) => {
+  // First check if product has discountPercent from API
+  if (product && product.discountPercent && product.discountPercent > 0) {
+    return product.discountPercent;
+  }
+  // Fallback to localStorage sales (for backward compatibility)
+  try {
+    const productId = product?.id;
+    if (!productId) return 0;
+    const sales = JSON.parse(localStorage.getItem('sales') || '[]');
+    const activeSale = sales.find(sale => 
+      sale.isActive && sale.productIds.includes(String(productId))
+    );
+    return activeSale ? activeSale.discountPercent : 0;
+  } catch {
+    return 0;
+  }
+};
+
 function Home() {
   const navigate = useNavigate();
   const { addToCart } = useCart();
@@ -164,7 +184,20 @@ function Home() {
             <div className="featured-card">
               <span className="limited-tag">LIMITED EDITION</span>
               <h3>{featuredProduct.name.toUpperCase()}</h3>
-              <p className="featured-price">{formatPrice(featuredProduct.price)}</p>
+              {(() => {
+                const discount = getSaleDiscount(featuredProduct);
+                if (discount > 0) {
+                  const salePrice = featuredProduct.price * (1 - discount / 100);
+                  return (
+                    <>
+                      <p className="featured-price">{formatPrice(salePrice)}</p>
+                      <p className="featured-original-price" style={{textDecoration: 'line-through', color: '#999', fontSize: '0.85em'}}>{formatPrice(featuredProduct.price)}</p>
+                      <span className="sale-badge" style={{background: '#ff4444', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8em'}}>-{discount}%</span>
+                    </>
+                  );
+                }
+                return <p className="featured-price">{formatPrice(featuredProduct.price)}</p>;
+              })()}
               <div className="color-options">
                 <span className="color-dot" style={{ background: '#FF6B35' }}></span>
                 <span className="color-dot" style={{ background: '#FFD700' }}></span>
@@ -226,12 +259,28 @@ function Home() {
             <div className="loading">Loading...</div>
           ) : (
             <div className="products-grid">
-              {currentProducts.map(product => (
+              {currentProducts.map(product => {
+                const saleDiscount = getSaleDiscount(product);
+                const salePrice = saleDiscount > 0 ? product.price * (1 - saleDiscount / 100) : null;
+                
+                return (
                 <Link key={product.id} to={`/product/${product.id}`} style={{ textDecoration: 'none', color: 'inherit' }} className="product-link">
                   <div className="product-card">
+                    {saleDiscount > 0 && (
+                      <span className="sale-badge">-{saleDiscount}%</span>
+                    )}
                     <span className="product-brand">{product.brand?.toUpperCase() || 'BRAND'}</span>
                     <h3 className="product-name">{product.name}</h3>
-                    <p className="product-price">{formatPrice(product.price)}</p>
+                    <div className="product-price-wrapper">
+                      {salePrice ? (
+                        <>
+                          <p className="product-price sale-price">{formatPrice(salePrice)}</p>
+                          <p className="product-price original-price">{formatPrice(product.price)}</p>
+                        </>
+                      ) : (
+                        <p className="product-price">{formatPrice(product.price)}</p>
+                      )}
+                    </div>
                     <div className="color-options">
                       <span className="color-dot" style={{ background: '#32CD32' }}></span>
                       <span className="color-dot" style={{ background: '#FFD700' }}></span>
@@ -252,7 +301,7 @@ function Home() {
                     </div>
                   </div>
                 </Link>
-              ))}
+              )})}
             </div>
           )}
         </div>

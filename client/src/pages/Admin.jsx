@@ -214,7 +214,7 @@ function Admin() {
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('focus', handleFocus);
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNewUserChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -661,21 +661,18 @@ function Admin() {
     }
   };
 
-  const handleCreateSale = () => {
+  const handleCreateSale = async () => {
     console.log('[Admin] handleCreateSale called - selectedProducts:', selectedProducts.size);
-    
+
     if (!saleData.saleName.trim()) {
-      console.log('[Admin] Sale name is empty');
       addNotification('❌ Vui lòng nhập tên chương trình sale', 3000);
       return;
     }
     if (!saleData.discountPercent || parseFloat(saleData.discountPercent) <= 0 || parseFloat(saleData.discountPercent) > 100) {
-      console.log('[Admin] Discount percent invalid:', saleData.discountPercent);
       addNotification('❌ Giảm giá phải từ 1-100%', 3000);
       return;
     }
     if (selectedProducts.size === 0) {
-      console.log('[Admin] No products selected');
       addNotification('❌ Vui lòng chọn ít nhất 1 sản phẩm', 3000);
       return;
     }
@@ -683,11 +680,23 @@ function Admin() {
     try {
       const productCount = selectedProducts.size;
       const productIdsArray = Array.from(selectedProducts).map(String);
-      
+      const productIdsInt = Array.from(selectedProducts).map(Number);
+      const discountValue = parseInt(saleData.discountPercent);
+
+      // Batch update discountPercent in database via API
+      console.log('[Admin] Updating discount in DB:', productIdsInt, discountValue);
+      await productsApi.batchUpdateDiscount(productIdsInt, discountValue);
+      console.log('[Admin] DB update successful');
+
+      // Update local products state
+      setProducts(prev => prev.map(p =>
+        selectedProducts.has(p.id) ? { ...p, discountPercent: discountValue } : p
+      ));
+
       const newSale = {
         id: `sale_${Date.now()}`,
         name: saleData.saleName,
-        discountPercent: parseInt(saleData.discountPercent),
+        discountPercent: discountValue,
         productIds: productIdsArray,
         isActive: true,
         createdAt: new Date().toISOString()
@@ -696,24 +705,38 @@ function Admin() {
       const sales = JSON.parse(localStorage.getItem('sales') || '[]');
       sales.push(newSale);
       localStorage.setItem('sales', JSON.stringify(sales));
-      
+
       setActiveSales(sales.filter(sale => sale.isActive === true));
       setSaleData({ discountPercent: '', saleName: '' });
       setSelectedProducts(new Set());
       setShowSaleModal(false);
       addNotification(`✅ Tạo chương trình sale "${saleData.saleName}" thành công! Áp dụng cho ${productCount} sản phẩm`, 3000);
-      
+
       localStorage.setItem('saleUpdated', JSON.stringify({ timestamp: Date.now() }));
     } catch (err) {
       console.error('[Admin Sale] Error creating sale:', err);
-      addNotification('❌ Không thể tạo chương trình sale', 3000);
+      addNotification('❌ Không thể tạo chương trình sale: ' + (err.response?.data?.message || err.message), 5000);
     }
   };
 
-  const handleDeleteSale = (saleId) => {
+  const handleDeleteSale = async (saleId) => {
     if (window.confirm('Xóa chương trình sale này?')) {
       try {
         const sales = JSON.parse(localStorage.getItem('sales') || '[]');
+        const saleToDelete = sales.find(s => s.id === saleId);
+
+        // Reset discountPercent to 0 in database for affected products
+        if (saleToDelete && saleToDelete.productIds) {
+          const productIdsInt = saleToDelete.productIds.map(Number);
+          await productsApi.batchUpdateDiscount(productIdsInt, 0);
+
+          // Update local state
+          const affectedIds = new Set(productIdsInt);
+          setProducts(prev => prev.map(p =>
+            affectedIds.has(p.id) ? { ...p, discountPercent: 0 } : p
+          ));
+        }
+
         const updated = sales.filter(s => s.id !== saleId);
         localStorage.setItem('sales', JSON.stringify(updated));
         setActiveSales(updated.filter(sale => sale.isActive === true));
@@ -726,7 +749,7 @@ function Admin() {
     }
   };
 
-  const getProductSaleDiscount = (productId) => {
+  const _getProductSaleDiscount = (productId) => {
     const activeSale = activeSales.find(sale => 
       sale.productIds.includes(String(productId))
     );
@@ -788,7 +811,7 @@ function Admin() {
     }
   };
 
-  const addAdminNotification = (message, orderId = null) => {
+  const _addAdminNotification = (message, orderId = null) => {
     const notifications = JSON.parse(localStorage.getItem(getAdminNotificationKey()) || '[]');
     const newNotification = {
       id: `admin_${Date.now()}`,
@@ -1284,18 +1307,21 @@ function Admin() {
                   <h3>Doanh thu tuần này</h3>
                   <div className="performance-value">
                     {formatPrice(orders
-                      .filter(o => new Date(o.orderDate || o.createdAt) > new Date(Date.now() - 7*24*60*60*1000))
+                      .filter(o => o.status === 'delivered' && new Date(o.orderDate || o.createdAt) > new Date(Date.now() - 7*24*60*60*1000))
                       .reduce((sum, o) => sum + (o.total || 0), 0)
                     )}
                   </div>
                   <div className="performance-change positive">
-                    +{Math.round(Math.random() * 20 + 5)}% so với tuần trước
+                    Đơn đã giao trong tuần
                   </div>
                 </div>
                 <div className="performance-card">
                   <h3>Đơn hàng trung bình</h3>
                   <div className="performance-value">
-                    {orders.length > 0 ? formatPrice(orders.reduce((sum, o) => sum + (o.total || 0), 0) / orders.length) : formatPrice(0)}
+                    {(() => {
+                      const delivered = orders.filter(o => o.status === 'delivered');
+                      return delivered.length > 0 ? formatPrice(delivered.reduce((sum, o) => sum + (o.total || 0), 0) / delivered.length) : formatPrice(0);
+                    })()}
                   </div>
                   <div className="performance-change neutral">
                     Trung bình trên đơn

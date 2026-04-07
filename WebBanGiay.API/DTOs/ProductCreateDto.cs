@@ -25,7 +25,7 @@ namespace WebBanGiay.API.DTOs
         public int Stock { get; set; }
 
         [Required(ErrorMessage = "Product image URL is required")]
-        [Url(ErrorMessage = "Image URL must be a valid URL")]
+        [StringLength(500, MinimumLength = 1, ErrorMessage = "Image URL must be between 1 and 500 characters")]
         public string ImageUrl { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Vui lòng chọn một mục trong danh sách")]
@@ -37,11 +37,17 @@ namespace WebBanGiay.API.DTOs
         public string Brand { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Product size is required")]
-        [StringLength(50, MinimumLength = 1, ErrorMessage = "Size must be between 1 and 50 characters")]
+        [StringLength(200, MinimumLength = 1, ErrorMessage = "Size must be between 1 and 200 characters")]
         public string Size { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Product color is required")]
         [StringLength(50, MinimumLength = 1, ErrorMessage = "Color must be between 1 and 50 characters")]
         public string Color { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Sale discount percentage (0-100). 0 means no sale.
+        /// </summary>
+        [Range(0, 100, ErrorMessage = "Discount must be between 0 and 100")]
+        public int DiscountPercent { get; set; } = 0;
     }
 }

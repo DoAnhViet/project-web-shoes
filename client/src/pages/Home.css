@@ -529,6 +529,43 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 420px;
+  position: relative;
+}
+
+.sale-badge {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: linear-gradient(135deg, #ff416c, #ff4b2b);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(255, 65, 108, 0.4);
+}
+
+.product-price-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.product-card .product-price.sale-price {
+  color: #ff416c;
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 0;
+}
+
+.product-card .product-price.original-price {
+  color: #999;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: line-through;
+  margin-bottom: 0;
 }
 
 .product-card:hover {

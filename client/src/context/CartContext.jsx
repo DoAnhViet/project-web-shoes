@@ -24,22 +24,30 @@ export function CartProvider({ children }) {
                 if (savedCart) {
                     const cartItems = JSON.parse(savedCart);
                     
-                    // Fetch latest product data to ensure bulkDiscountRules is present
+                    // Always fetch latest product data to ensure discount/price are up to date
                     const enrichedCart = await Promise.all(
                         cartItems.map(async (item) => {
-                            if (!item.bulkDiscountRules) {
-                                try {
-                                    const response = await fetch(`http://localhost:5240/api/products/${item.id}`);
-                                    if (response.ok) {
-                                        const product = await response.json();
-                                        return {
-                                            ...item,
-                                            bulkDiscountRules: product.bulkDiscountRules
-                                        };
-                                    }
-                                } catch {
-                                    console.log('Could not fetch product data for:', item.id);
+                            try {
+                                const response = await fetch(`http://localhost:5240/api/products/${item.id}`);
+                                if (response.ok) {
+                                    const product = await response.json();
+                                    const discountPercent = product.discountPercent || 0;
+                                    const originalPrice = product.price;
+                                    // Always recalculate price based on current discount
+                                    const price = discountPercent > 0
+                                        ? originalPrice * (1 - discountPercent / 100)
+                                        : originalPrice;
+                                    return {
+                                        ...item,
+                                        bulkDiscountRules: product.bulkDiscountRules,
+                                        discountPercent,
+                                        price,
+                                        originalPrice,
+                                        stock: product.stock
+                                    };
                                 }
+                            } catch {
+                                console.log('Could not fetch product data for:', item.id);
                             }
                             return item;
                         })
@@ -88,13 +96,18 @@ export function CartProvider({ children }) {
                         : item
                 );
             } else {
-                // Add new item
+                // Add new item - also store discountPercent for sale price
+                const salePrice = product.discountPercent > 0 
+                    ? product.price * (1 - product.discountPercent / 100) 
+                    : product.price;
                 newCart = [
                     ...prevCart,
                     {
                         id: product.id,
                         name: product.name,
-                        price: product.price,
+                        price: salePrice, // Use sale price if discounted
+                        originalPrice: product.price, // Keep original for reference
+                        discountPercent: product.discountPercent || 0,
                         imageUrl: product.imageUrl,
                         brand: product.brand,
                         size: product.size,
@@ -193,6 +206,7 @@ export function CartProvider({ children }) {
     );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useCart() {
     const context = useContext(CartContext);
     if (!context) {

@@ -169,6 +169,7 @@ namespace WebBanGiay.API.Controllers
                     Brand = createDto.Brand ?? string.Empty,
                     Size = createDto.Size ?? string.Empty,
                     Color = createDto.Color ?? string.Empty,
+                    DiscountPercent = createDto.DiscountPercent,
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -215,6 +216,7 @@ namespace WebBanGiay.API.Controllers
                 existingProduct.Brand = updateDto.Brand;
                 existingProduct.Size = updateDto.Size;
                 existingProduct.Color = updateDto.Color;
+                existingProduct.DiscountPercent = updateDto.DiscountPercent;
 
                 await _productRepository.UpdateAsync(existingProduct);
                 _logger.LogInformation("✅ Product {Id} updated successfully", id);
@@ -255,7 +257,7 @@ namespace WebBanGiay.API.Controllers
             }
         }
 
-        // PATCH: api/Products/{id}/image - Update product image (no auth required)
+        // PATCH: api/Products/{id}/image - Update product image
         [HttpPatch("{id}/image")]
         [RequireAdmin]
         public async Task<ActionResult> UpdateProductImage(int id, [FromBody] UpdateImageDto dto)
@@ -279,10 +281,76 @@ namespace WebBanGiay.API.Controllers
                 return StatusCode(500, new { message = "Error updating product image" });
             }
         }
+
+        // PATCH: api/Products/{id}/discount - Update product discount percent
+        [HttpPatch("{id}/discount")]
+        [RequireAdmin]
+        public async Task<ActionResult> UpdateProductDiscount(int id, [FromBody] UpdateDiscountDto dto)
+        {
+            try
+            {
+                var product = await _productRepository.GetByIdAsync(id);
+                if (product == null)
+                {
+                    return NotFound(new { message = "Product not found" });
+                }
+
+                product.DiscountPercent = dto.DiscountPercent;
+                await _productRepository.UpdateAsync(product);
+
+                _logger.LogInformation("Product {Id} discount updated to {Discount}%", id, dto.DiscountPercent);
+                return Ok(new { message = "Discount updated successfully", discountPercent = product.DiscountPercent });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating product discount");
+                return StatusCode(500, new { message = "Error updating product discount" });
+            }
+        }
+
+        // PATCH: api/Products/batch-discount - Batch update discount for multiple products
+        [HttpPatch("batch-discount")]
+        [RequireAdmin]
+        public async Task<ActionResult> BatchUpdateDiscount([FromBody] BatchDiscountDto dto)
+        {
+            try
+            {
+                var updated = 0;
+                foreach (var productId in dto.ProductIds)
+                {
+                    var product = await _productRepository.GetByIdAsync(productId);
+                    if (product != null)
+                    {
+                        product.DiscountPercent = dto.DiscountPercent;
+                        await _productRepository.UpdateAsync(product);
+                        updated++;
+                    }
+                }
+
+                _logger.LogInformation("Batch discount update: {Count} products set to {Discount}%", updated, dto.DiscountPercent);
+                return Ok(new { message = $"Updated {updated} products", discountPercent = dto.DiscountPercent });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error batch updating discounts");
+                return StatusCode(500, new { message = "Error batch updating discounts" });
+            }
+        }
     }
 
     public class UpdateImageDto
     {
         public string ImageUrl { get; set; } = string.Empty;
+    }
+
+    public class UpdateDiscountDto
+    {
+        public int DiscountPercent { get; set; }
+    }
+
+    public class BatchDiscountDto
+    {
+        public List<int> ProductIds { get; set; } = new();
+        public int DiscountPercent { get; set; }
     }
 }

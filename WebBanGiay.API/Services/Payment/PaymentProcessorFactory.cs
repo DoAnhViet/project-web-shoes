@@ -55,6 +55,36 @@ namespace WebBanGiay.API.Services.Payment
     }
 
     /// <summary>
+    /// COD (Cash on Delivery) payment processor
+    /// </summary>
+    public class CodPaymentProcessor : IPaymentProcessor
+    {
+        public string GetPaymentMethodName() => "Cash on Delivery";
+
+        public async Task<bool> ProcessPaymentAsync(decimal amount, string transactionId)
+        {
+            // COD doesn't need immediate processing, just mark as pending
+            await Task.Delay(10);
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Banking (QR Code) payment processor
+    /// </summary>
+    public class BankingPaymentProcessor : IPaymentProcessor
+    {
+        public string GetPaymentMethodName() => "Banking Transfer";
+
+        public async Task<bool> ProcessPaymentAsync(decimal amount, string transactionId)
+        {
+            // Banking transfer needs verification, mark as pending
+            await Task.Delay(50);
+            return true;
+        }
+    }
+
+    /// <summary>
     /// Factory to create payment processors
     /// </summary>
     public interface IPaymentProcessorFactory
@@ -68,6 +98,8 @@ namespace WebBanGiay.API.Services.Payment
         {
             return paymentMethod.ToLower() switch
             {
+                "cod" => new CodPaymentProcessor(),
+                "banking" => new BankingPaymentProcessor(),
                 "creditcard" => new CreditCardPaymentProcessor(),
                 "banktransfer" => new BankTransferPaymentProcessor(),
                 "ewallet" => new EWalletPaymentProcessor(),

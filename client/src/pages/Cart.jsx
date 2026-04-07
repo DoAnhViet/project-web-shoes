@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { ordersApi } from '../api/api';
 import './Cart.css';
 
 function Cart() {
     const navigate = useNavigate();
     const { cart, removeFromCart, updateQuantity, clearCart, getTotalPrice, getTotalItems } = useCart();
+    const { user } = useAuth();
     const [showCheckout, setShowCheckout] = useState(false);
     const [orderCreated, setOrderCreated] = useState(null);
     const [formData, setFormData] = useState({
@@ -91,58 +94,63 @@ function Cart() {
             return;
         }
 
-        // Validate online payment details
-        if (formData.paymentMethod === 'card') {
-            if (!paymentDetails.cardNumber || !paymentDetails.cardName || !paymentDetails.expiryDate || !paymentDetails.cvv) {
-                setPaymentError('Vui lòng điền đầy đủ thông tin thẻ');
-                return;
-            }
+        // Create order via API
+        const orderId = 'ORD' + Date.now().toString(36).toUpperCase();
 
-            // Validate card number (basic validation)
-            if (paymentDetails.cardNumber.replace(/\s/g, '').length !== 16) {
-                setPaymentError('Số thẻ phải có 16 chữ số');
-                return;
-            }
-
-            // Validate CVV
-            if (paymentDetails.cvv.length !== 3) {
-                setPaymentError('CVV phải có 3 chữ số');
-                return;
-            }
-
-            // Validate expiry date format
-            if (!/^\d{2}\/\d{2}$/.test(paymentDetails.expiryDate)) {
-                setPaymentError('Ngày hết hạn phải có định dạng MM/YY');
-                return;
-            }
-        } else if (formData.paymentMethod === 'bank') {
-            // For bank transfer, just show notification
-            alert('Bạn sẽ nhận được thông tin chuyển khoản sau khi đặt hàng');
-        } else if (formData.paymentMethod === 'ewallet') {
-            // For e-wallet, redirect to payment gateway
-            alert('Bạn sẽ được chuyển hướng đến trang thanh toán');
-        }
-
-        // Create order
-        const order = {
-            id: Math.random().toString(36).substr(2, 9),
-            customerInfo: formData,
-            items: cart,
-            totalPrice: getTotalPrice(),
-            totalItems: getTotalItems(),
-            date: new Date().toLocaleString('vi-VN'),
-            status: 'pending',
+        // Prepare API order data
+        const apiOrderData = {
+            userId: user?.id || null,
+            fullName: formData.fullName,
+            email: formData.email || user?.email || '',
+            phone: formData.phone,
+            address: formData.address,
+            city: formData.city,
+            district: '',
+            ward: '',
+            note: '',
             paymentMethod: formData.paymentMethod,
-            paymentStatus: formData.paymentMethod === 'cod' ? 'pending' : 'completed'
+            discount: priceBreakdown.discount,
+            items: cart.map(item => ({
+                productId: item.id,
+                productName: item.name,
+                productImage: item.imageUrl || item.image || '',
+                size: item.size || '',
+                color: item.color || '',
+                price: item.price,
+                quantity: item.quantity
+            }))
         };
 
-        // Save order to localStorage
-        const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-        orders.push(order);
-        localStorage.setItem('orders', JSON.stringify(orders));
+        try {
+            console.log('📦 Creating order via API:', apiOrderData);
+            const response = await ordersApi.create(apiOrderData);
+            const createdOrder = response.data;
+                console.log('✅ Order created successfully:', createdOrder);
 
-        setOrderCreated(order);
-        clearCart();
+                // Save to localStorage for order history
+                const localOrder = {
+                    orderId: createdOrder.orderCode || orderId,
+                    id: createdOrder.id,
+                    orderCode: createdOrder.orderCode,
+                    orderDate: new Date().toISOString(),
+                    shippingInfo: formData,
+                    items: cart,
+                    total: createdOrder.total,
+                    status: 'pending',
+                    paymentMethod: formData.paymentMethod,
+                    paymentStatus: formData.paymentMethod === 'cod' ? 'pending' : 'completed'
+                };
+
+                const orders = JSON.parse(localStorage.getItem('orders') || '[]');
+                orders.unshift(localOrder);
+                localStorage.setItem('orders', JSON.stringify(orders));
+
+                setOrderCreated(localOrder);
+                clearCart();
+        } catch (error) {
+            console.error('❌ Network error:', error);
+            setPaymentError('Không thể tạo đơn hàng: ' + (error.response?.data?.message || error.message));
+        }
     };
 
     // If the cart becomes empty while on the checkout form, hide checkout
@@ -178,21 +186,21 @@ function Cart() {
                 <div className="order-success">
                     <div className="success-icon">✓</div>
                     <h2>Đặt hàng thành công!</h2>
-                    <p className="order-id">Mã đơn hàng: <strong>#{orderCreated.id}</strong></p>
-                    <p className="order-time">{orderCreated.date}</p>
+                    <p className="order-id">Mã đơn hàng: <strong>#{orderCreated.orderCode || orderCreated.orderId}</strong></p>
+                    <p className="order-time">{new Date(orderCreated.orderDate).toLocaleString('vi-VN')}</p>
 
                     <div className="order-summary-info">
                         <div className="info-group">
                             <h4>Giao tới:</h4>
-                            <p>{orderCreated.customerInfo.fullName}</p>
-                            <p>{orderCreated.customerInfo.address}</p>
-                            {orderCreated.customerInfo.city && <p>{orderCreated.customerInfo.city}</p>}
-                            <p>{orderCreated.customerInfo.phone}</p>
+                            <p>{orderCreated.shippingInfo?.fullName}</p>
+                            <p>{orderCreated.shippingInfo?.address}</p>
+                            {orderCreated.shippingInfo?.city && <p>{orderCreated.shippingInfo.city}</p>}
+                            <p>{orderCreated.shippingInfo?.phone}</p>
                         </div>
                         <div className="info-group">
                             <h4>Tóm tắt đơn hàng:</h4>
-                            <p>{orderCreated.totalItems} sản phẩm</p>
-                            <p className="total-price">{formatPrice(orderCreated.totalPrice)}</p>
+                            <p>{orderCreated.items?.length || 0} sản phẩm</p>
+                            <p className="total-price">{formatPrice(orderCreated.total || 0)}</p>
                         </div>
                     </div>
 
@@ -247,7 +255,20 @@ function Cart() {
                                             {item.color}
                                         </span>
                                     </div>
-                                    <p className="item-price">{formatPrice(item.price)}</p>
+                                    {/* Show sale price and original price */}
+                                    <div className="item-price-wrapper">
+                                        <p className="item-price">{formatPrice(item.price)}</p>
+                                        {item.discountPercent > 0 && item.originalPrice && (
+                                            <p className="item-original-price" style={{textDecoration: 'line-through', color: '#999', fontSize: '0.85em'}}>
+                                                {formatPrice(item.originalPrice)}
+                                            </p>
+                                        )}
+                                        {item.discountPercent > 0 && (
+                                            <span className="item-discount-badge" style={{background: '#ff4444', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75em'}}>
+                                                -{item.discountPercent}%
+                                            </span>
+                                        )}
+                                    </div>
                                     {/* Show bulk discount if applicable */}
                                     {calculateBulkDiscount(item) > 0 && (
                                         <div className="bulk-discount-badge">
@@ -395,124 +416,36 @@ function Cart() {
                                             <input
                                                 type="radio"
                                                 name="paymentMethod"
-                                                value="bank"
-                                                checked={formData.paymentMethod === 'bank'}
+                                                value="banking"
+                                                checked={formData.paymentMethod === 'banking'}
                                                 onChange={(e) => {
                                                     setFormData(prev => ({ ...prev, paymentMethod: e.target.value }));
                                                     setPaymentError('');
                                                 }}
                                             />
                                             <span className="payment-label">
-                                                <strong>🏦 Chuyển khoản ngân hàng</strong>
-                                                <small>Bạn sẽ nhận thông tin chuyển khoản</small>
-                                            </span>
-                                        </label>
-
-                                        <label className="payment-option">
-                                            <input
-                                                type="radio"
-                                                name="paymentMethod"
-                                                value="card"
-                                                checked={formData.paymentMethod === 'card'}
-                                                onChange={(e) => {
-                                                    setFormData(prev => ({ ...prev, paymentMethod: e.target.value }));
-                                                    setPaymentError('');
-                                                }}
-                                            />
-                                            <span className="payment-label">
-                                                <strong>💳 Thẻ tín dụng/Ghi nợ</strong>
-                                                <small>Visa, Mastercard, v.v...</small>
-                                            </span>
-                                        </label>
-
-                                        <label className="payment-option">
-                                            <input
-                                                type="radio"
-                                                name="paymentMethod"
-                                                value="ewallet"
-                                                checked={formData.paymentMethod === 'ewallet'}
-                                                onChange={(e) => {
-                                                    setFormData(prev => ({ ...prev, paymentMethod: e.target.value }));
-                                                    setPaymentError('');
-                                                }}
-                                            />
-                                            <span className="payment-label">
-                                                <strong>📱 Ví điện tử</strong>
-                                                <small>Momo, ZaloPay, v.v...</small>
+                                                <strong>🏦 Chuyển khoản QR Banking</strong>
+                                                <small>DO ANH VIET - 1907 3349 9870 13 - TECHCOMBANK</small>
                                             </span>
                                         </label>
                                     </div>
+                                    
+                                    {/* QR Banking Info */}
+                                    {formData.paymentMethod === 'banking' && (
+                                        <div className="bank-qr-section" style={{textAlign: 'center', padding: '20px', background: '#f8f9fa', borderRadius: '12px', marginTop: '15px'}}>
+                                            <img 
+                                                src="/qr-banking.png" 
+                                                alt="QR Banking" 
+                                                style={{width: '200px', height: 'auto', marginBottom: '15px', borderRadius: '8px'}}
+                                            />
+                                            <div style={{textAlign: 'left', padding: '15px', background: '#fff', borderRadius: '8px'}}>
+                                                <p><strong>🏦 Ngân hàng:</strong> TECHCOMBANK</p>
+                                                <p><strong>👤 Chủ TK:</strong> DO ANH VIET</p>
+                                                <p><strong>💳 Số TK:</strong> 1907 3349 9870 13</p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-
-                                {/* Card Payment Form */}
-                                {formData.paymentMethod === 'card' && (
-                                    <div className="card-payment-section">
-                                        <h4>Thông tin thẻ thanh toán</h4>
-
-                                        <div className="form-group full">
-                                            <label>Số thẻ *</label>
-                                            <input
-                                                type="text"
-                                                placeholder="1234 5678 9012 3456"
-                                                value={paymentDetails.cardNumber}
-                                                onChange={(e) => {
-                                                    let value = e.target.value.replace(/\D/g, '');
-                                                    if (value.length > 16) value = value.slice(0, 16);
-                                                    const formatted = value.replace(/(\d{4})/g, '$1 ').trim();
-                                                    setPaymentDetails(prev => ({ ...prev, cardNumber: formatted }));
-                                                }}
-                                                maxLength="19"
-                                            />
-                                        </div>
-
-                                        <div className="form-group full">
-                                            <label>Tên chủ thẻ *</label>
-                                            <input
-                                                type="text"
-                                                placeholder="NGUYEN VAN A"
-                                                value={paymentDetails.cardName}
-                                                onChange={(e) => setPaymentDetails(prev => ({ ...prev, cardName: e.target.value.toUpperCase() }))}
-                                            />
-                                        </div>
-
-                                        <div className="form-row">
-                                            <div className="form-group">
-                                                <label>Ngày hết hạn *</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="MM/YY"
-                                                    value={paymentDetails.expiryDate}
-                                                    onChange={(e) => {
-                                                        let value = e.target.value.replace(/\D/g, '');
-                                                        if (value.length >= 2) {
-                                                            value = value.slice(0, 2) + '/' + value.slice(2, 4);
-                                                        }
-                                                        setPaymentDetails(prev => ({ ...prev, expiryDate: value }));
-                                                    }}
-                                                    maxLength="5"
-                                                />
-                                            </div>
-                                            <div className="form-group">
-                                                <label>CVV *</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="123"
-                                                    value={paymentDetails.cvv}
-                                                    onChange={(e) => {
-                                                        let value = e.target.value.replace(/\D/g, '');
-                                                        if (value.length > 3) value = value.slice(0, 3);
-                                                        setPaymentDetails(prev => ({ ...prev, cvv: value }));
-                                                    }}
-                                                    maxLength="3"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="card-warning">
-                                            ⚠️ Thông tin thẻ của bạn được mã hóa và bảo mật 100%
-                                        </div>
-                                    </div>
-                                )}
 
                                 {paymentError && (
                                     <div className="payment-error-box">

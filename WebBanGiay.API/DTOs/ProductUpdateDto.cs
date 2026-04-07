@@ -38,5 +38,11 @@ namespace WebBanGiay.API.DTOs
 
         [Required]
         public string Color { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Sale discount percentage (0-100). 0 means no sale.
+        /// </summary>
+        [Range(0, 100, ErrorMessage = "Discount must be between 0 and 100")]
+        public int DiscountPercent { get; set; } = 0;
     }
 }

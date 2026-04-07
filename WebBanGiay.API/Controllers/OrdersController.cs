@@ -160,6 +160,7 @@ namespace WebBanGiay.API.Controllers
                 // Create order
                 var order = new Order
                 {
+                    UserId = dto.UserId,
                     OrderCode = orderCode,
                     FullName = dto.FullName,
                     Email = dto.Email,
